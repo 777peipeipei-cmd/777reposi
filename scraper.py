@@ -14,10 +14,36 @@ logger = logging.getLogger(__name__)
 _CLASS_MAP = {'A1': 4, 'A2': 3, 'B1': 2, 'B2': 1}
 
 
+_session = None
+
+def _get_session():
+    global _session
+    if _session is None:
+        _session = requests.Session()
+        # トップページでクッキーを取得
+        try:
+            _session.get('https://www.boatrace.jp/', headers=config.HEADERS, timeout=10)
+        except Exception:
+            pass
+    return _session
+
+
 def _fetch(url, params=None):
     time.sleep(config.REQUEST_DELAY)
     try:
-        resp = requests.get(url, params=params, headers=config.HEADERS, timeout=15)
+        resp = _get_session().get(url, params=params, headers=config.HEADERS, timeout=15)
+        if resp.status_code == 403:
+            logger.error(
+                '\n'
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+                '  403 Forbidden: boatrace.jp にアクセスできません。\n'
+                '  クラウドサーバーのIPはブロックされています。\n'
+                '  【解決策】自宅PC・Mac で実行してください:\n'
+                '    pip install -r requirements.txt\n'
+                '    python predict.py\n'
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+            )
+            return None
         resp.raise_for_status()
         resp.encoding = 'utf-8'
         return BeautifulSoup(resp.text, 'lxml')
