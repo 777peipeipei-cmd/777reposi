@@ -293,7 +293,7 @@ async function load(force = false) {
     render();
     checkAndNotify();
     if (_data.status === 'fetching') {
-      setTimeout(() => load(), 10000);
+      setTimeout(() => load(), 3000);   // 取得中は3秒ごとに更新
     }
   } catch (e) {
     document.getElementById('app').innerHTML =

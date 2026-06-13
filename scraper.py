@@ -2,6 +2,7 @@
 import re
 import time
 import logging
+import threading
 import unicodedata
 from datetime import datetime
 
@@ -20,15 +21,25 @@ def _normalize(text):
     return unicodedata.normalize('NFKC', str(text)).strip()
 
 _session = None
+_session_lock = threading.Lock()
 
 def _get_session():
     global _session
     if _session is None:
-        _session = requests.Session()
-        try:
-            _session.get('https://www.boatrace.jp/', headers=config.HEADERS, timeout=10)
-        except Exception:
-            pass
+        with _session_lock:
+            if _session is None:
+                s = requests.Session()
+                # 並列取得に備えて接続プールを拡張
+                pool = getattr(config, 'FETCH_WORKERS', 6) + 2
+                adapter = requests.adapters.HTTPAdapter(
+                    pool_connections=pool, pool_maxsize=pool, max_retries=1)
+                s.mount('https://', adapter)
+                s.mount('http://', adapter)
+                try:
+                    s.get('https://www.boatrace.jp/', headers=config.HEADERS, timeout=10)
+                except Exception:
+                    pass
+                _session = s
     return _session
 
 

@@ -13,6 +13,7 @@ import logging
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 from flask import Flask, Response, jsonify, render_template, request
@@ -62,18 +63,27 @@ def _parse_deadline(time_str, now):
 def _collect_pending_races(venues, date_str, now):
     """
     実施中の場の「締切前かつ近い」レースを締切時刻順に並べて返す。
+    各場の締切時刻取得を並列化して高速化する。
     Returns list of (deadline_dt|None, minutes_to_close|None, jcd, venue, race_no)
     """
+    with _lock:
+        _state['progress'] = f'{len(venues)}場の締切時刻を確認中...'
+
+    def _deadlines_for(jcd):
+        return jcd, scraper.get_race_deadlines(jcd, date_str)
+
+    deadline_map = {}
+    workers = min(getattr(config, 'FETCH_WORKERS', 6), max(1, len(venues)))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for jcd, deadlines in ex.map(_deadlines_for, venues):
+            deadline_map[jcd] = deadlines
+
     pending = []
     for jcd in venues:
         venue_name = config.VENUES.get(jcd, jcd)
-        with _lock:
-            _state['progress'] = f'{venue_name} の締切時刻を確認中...'
-
-        deadlines = scraper.get_race_deadlines(jcd, date_str)
+        deadlines = deadline_map.get(jcd) or {}
 
         if not deadlines:
-            # 締切時刻が取れない場合は先頭数レースのみ（暴走防止）
             logger.warning('%s: 締切時刻を取得できず。先頭%dレースのみ対象。',
                            venue_name, config.FALLBACK_RACES)
             for rno in range(1, config.FALLBACK_RACES + 1):
@@ -86,7 +96,6 @@ def _collect_pending_races(venues, date_str, now):
             if ddl is None:
                 continue
             minutes = (ddl - now).total_seconds() / 60.0
-            # 締切前(GRACE考慮)かつ FETCH_WINDOW 分以内のレースだけ
             if -config.CLOSED_GRACE_MIN <= minutes <= config.FETCH_WINDOW_MIN:
                 pending.append((ddl, minutes, jcd, venue_name, rno))
                 kept += 1
@@ -95,7 +104,7 @@ def _collect_pending_races(venues, date_str, now):
     # 締切が近い順（時刻不明は末尾）
     pending.sort(key=lambda x: (x[0] is None, x[0] or now))
 
-    # 最大数で打ち切り（暴走防止）
+    # 最大数で打ち切り（暴走防止・速度優先で締切が近い順を優先）
     if len(pending) > config.MAX_FETCH_RACES:
         logger.info('対象レースが多いため %d 件に制限', config.MAX_FETCH_RACES)
         pending = pending[:config.MAX_FETCH_RACES]
@@ -131,103 +140,32 @@ def _fetch_all(date_str):
         return
 
     total = len(pending)
-    logger.info('取得対象: %d レース。締切が近い順に取得開始します。', total)
+    logger.info('取得対象: %d レース。%d並列で取得開始します。',
+                total, config.FETCH_WORKERS)
 
-    for idx, (ddl, minutes, jcd, venue_name, race_no) in enumerate(pending, 1):
-        with _lock:
-            _state['progress'] = f'[{idx}/{total}] {venue_name} {race_no}R 取得中...'
-        logger.info('[%d/%d] %s %dR 取得中...', idx, total, venue_name, race_no)
-
-        try:
-            racers = scraper.get_race_card(race_no, jcd, date_str)
-            if not racers:
-                continue
-
-            before = scraper.get_before_info(race_no, jcd, date_str)
-            odds_map = scraper.get_win_odds(race_no, jcd, date_str)
-            odds_available = bool(odds_map)
-            if not odds_available:
-                logger.info('  → オッズ未公開（出走表のみ表示）')
-
-            X = feat.build_race_matrix(racers, before, jcd)
-            probs = predictor.predict_proba(X)
-            all_probs = [float(p) for p in probs]
-
-            boats = []
-            has_hit = False
-            for i, racer in enumerate(racers):
-                boat_no = racer.get('boat_no', i + 1)
-                odds = odds_map.get(boat_no) if odds_available else None
-                win_prob = float(probs[i])
-                raw_conf, _, breakdown = mdl.compute_confidence(
-                    racer, before, boat_no, win_prob, all_probs, predictor.name)
-                # キャリブレーション補正を適用
-                conf_pct   = res_tracker.calibrator.calibrate(raw_conf)
-                conf_label = res_tracker.calibrator.label(conf_pct)
-                hit = bool(odds and odds >= config.ODDS_THRESHOLD
-                           and win_prob >= config.WIN_PROB_THRESHOLD)
-                if hit:
-                    has_hit = True
-
-                boats.append({
-                    'boat_no':           boat_no,
-                    'racer':             racer.get('racer_name', '不明'),
-                    'class':             _cls(racer.get('class_rank')),
-                    'national_win_rate': racer.get('national_win_rate'),
-                    'course':            before['course_positions'].get(boat_no, boat_no),
-                    'ex_time':           before['exhibition_times'].get(boat_no),
-                    'motor_rate':        racer.get('motor_top2_rate'),
-                    'odds':              odds,
-                    'odds_available':    odds_available,
-                    'win_prob':          win_prob,
-                    'confidence':        conf_pct,
-                    'conf_label':        conf_label,
-                    'conf_breakdown':    breakdown,
-                    'hit':               hit,
-                })
-
-            # 3連単予測（Harville式）
-            boat_nos_list  = [b['boat_no']  for b in boats]
-            win_probs_list = [b['win_prob'] for b in boats]
-            trifecta = mdl.predict_trifecta(win_probs_list, boat_nos_list, top_n=6)
-
-            # 締切までの残り分（取得時点で再計算）
-            mins_left = None
-            if ddl is not None:
-                mins_left = round((ddl - datetime.now()).total_seconds() / 60.0)
-
-            # 既存の結果（レース終了後に fill_result で書き込まれたもの）
-            result_data = None
+    # ── 並列でレース取得（締切が近い順に投入）──────────────
+    done = 0
+    workers = min(config.FETCH_WORKERS, max(1, total))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = {ex.submit(_build_race, item, predictor, date_str): item
+                   for item in pending}
+        for fut in as_completed(futures):
+            done += 1
             try:
-                result_data = res_tracker.get_saved_result(jcd, race_no, date_str)
-            except Exception:
-                pass
-
-            race = {
-                'jcd':          jcd,
-                'venue':        venue_name,
-                'race_no':      race_no,
-                'deadline':     ddl.strftime('%H:%M') if ddl else None,
-                'minutes_left': mins_left,
-                'imminent':     bool(mins_left is not None
-                                     and -config.CLOSED_GRACE_MIN <= mins_left <= config.IMMINENT_WINDOW_MIN),
-                'boats':        boats,
-                'has_hit':      has_hit,
-                'trifecta':     trifecta,
-                'result':       result_data,
-            }
-            # 予測を保存（後でキャリブレーションに使う）
-            try:
-                res_tracker.save_prediction(jcd, race_no, date_str, boats, trifecta)
-            except Exception as e2:
-                logger.debug('予測保存エラー（無視）: %s', e2)
+                race = fut.result()
+            except Exception as e:
+                item = futures[fut]
+                logger.warning('%s %dR エラー: %s', item[3], item[4], e)
+                race = None
 
             with _lock:
-                _state['races'].append(race)
-                _state['updated'] = datetime.now().strftime('%H:%M:%S')
-
-        except Exception as e:
-            logger.warning('%s %dR エラー: %s', venue_name, race_no, e)
+                if race:
+                    _state['races'].append(race)
+                    # 締切が近い順を保つ（時刻不明は末尾）
+                    _state['races'].sort(
+                        key=lambda r: (r['deadline'] is None, r['deadline'] or '99:99'))
+                    _state['updated'] = datetime.now().strftime('%H:%M:%S')
+                _state['progress'] = f'[{done}/{total}] 取得中...'
 
     with _lock:
         _state['status'] = 'done'
@@ -236,6 +174,95 @@ def _fetch_all(date_str):
 
     # 過去レースの結果を確認してキャリブレーションを更新
     threading.Thread(target=_update_calibration, args=(date_str,), daemon=True).start()
+
+
+def _build_race(item, predictor, date_str):
+    """
+    1レース分のデータを取得して race dict を組み立てて返す。
+    並列実行されるため、共有状態の書き込みは行わない（純粋な計算 + ファイル保存のみ）。
+    Returns race dict or None.
+    """
+    ddl, minutes, jcd, venue_name, race_no = item
+
+    racers = scraper.get_race_card(race_no, jcd, date_str)
+    if not racers:
+        return None
+
+    before = scraper.get_before_info(race_no, jcd, date_str)
+    odds_map = scraper.get_win_odds(race_no, jcd, date_str)
+    odds_available = bool(odds_map)
+
+    X = feat.build_race_matrix(racers, before, jcd)
+    probs = predictor.predict_proba(X)
+    all_probs = [float(p) for p in probs]
+
+    boats = []
+    has_hit = False
+    for i, racer in enumerate(racers):
+        boat_no = racer.get('boat_no', i + 1)
+        odds = odds_map.get(boat_no) if odds_available else None
+        win_prob = float(probs[i])
+        raw_conf, _, breakdown = mdl.compute_confidence(
+            racer, before, boat_no, win_prob, all_probs, predictor.name)
+        conf_pct   = res_tracker.calibrator.calibrate(raw_conf)
+        conf_label = res_tracker.calibrator.label(conf_pct)
+        hit = bool(odds and odds >= config.ODDS_THRESHOLD
+                   and win_prob >= config.WIN_PROB_THRESHOLD)
+        if hit:
+            has_hit = True
+
+        boats.append({
+            'boat_no':           boat_no,
+            'racer':             racer.get('racer_name', '不明'),
+            'class':             _cls(racer.get('class_rank')),
+            'national_win_rate': racer.get('national_win_rate'),
+            'course':            before['course_positions'].get(boat_no, boat_no),
+            'ex_time':           before['exhibition_times'].get(boat_no),
+            'motor_rate':        racer.get('motor_top2_rate'),
+            'odds':              odds,
+            'odds_available':    odds_available,
+            'win_prob':          win_prob,
+            'confidence':        conf_pct,
+            'conf_label':        conf_label,
+            'conf_breakdown':    breakdown,
+            'hit':               hit,
+        })
+
+    # 3連単予測（Harville式）
+    boat_nos_list  = [b['boat_no']  for b in boats]
+    win_probs_list = [b['win_prob'] for b in boats]
+    trifecta = mdl.predict_trifecta(win_probs_list, boat_nos_list, top_n=6)
+
+    mins_left = None
+    if ddl is not None:
+        mins_left = round((ddl - datetime.now()).total_seconds() / 60.0)
+
+    result_data = None
+    try:
+        result_data = res_tracker.get_saved_result(jcd, race_no, date_str)
+    except Exception:
+        pass
+
+    race = {
+        'jcd':          jcd,
+        'venue':        venue_name,
+        'race_no':      race_no,
+        'deadline':     ddl.strftime('%H:%M') if ddl else None,
+        'minutes_left': mins_left,
+        'imminent':     bool(mins_left is not None
+                             and -config.CLOSED_GRACE_MIN <= mins_left <= config.IMMINENT_WINDOW_MIN),
+        'boats':        boats,
+        'has_hit':      has_hit,
+        'trifecta':     trifecta,
+        'result':       result_data,
+    }
+
+    try:
+        res_tracker.save_prediction(jcd, race_no, date_str, boats, trifecta)
+    except Exception as e2:
+        logger.debug('予測保存エラー（無視）: %s', e2)
+
+    return race
 
 
 def _update_calibration(date_str):
