@@ -2,6 +2,7 @@
 import re
 import time
 import logging
+import unicodedata
 from datetime import datetime
 
 import requests
@@ -12,6 +13,11 @@ import config
 logger = logging.getLogger(__name__)
 
 _CLASS_MAP = {'A1': 4, 'A2': 3, 'B1': 2, 'B2': 1}
+
+
+def _normalize(text):
+    """全角英数字・記号をASCIIに正規化（例: Ａ１→A1, ６．７５→6.75）"""
+    return unicodedata.normalize('NFKC', str(text)).strip()
 
 _session = None
 
@@ -52,7 +58,7 @@ def _fetch(url, params=None):
 
 def _safe_float(text):
     try:
-        return float(str(text).strip().replace(',', ''))
+        return float(_normalize(text).replace(',', ''))
     except (ValueError, TypeError):
         return None
 
@@ -161,19 +167,19 @@ def _extract_name_class(row, d):
                 m = re.search(r'toban=(\d+)', href, re.I)
                 if m:
                     d.setdefault('racer_no', m.group(1))
-        # 級別
-        t = cell.get_text(strip=True)
-        if t in _CLASS_MAP and 'class_rank' not in d:
-            d['class_rank'] = _CLASS_MAP[t]
+        # 級別（全角対応: Ａ１→A1）
+        t_norm = _normalize(cell.get_text(strip=True))
+        if t_norm in _CLASS_MAP and 'class_rank' not in d:
+            d['class_rank'] = _CLASS_MAP[t_norm]
 
 
 def _extract_rates(row, d):
     """
     行から勝率・2連率を取得（d に書き込む）。
-    小数点表記の数値を全て収集して _assign_rates に渡す。
+    全角数字・全角ピリオドを正規化してから小数点数値を収集する。
     """
-    texts = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
-    # 小数点を含む数値（桁数不問）
+    texts = [_normalize(c.get_text(strip=True)) for c in row.find_all(['td', 'th'])]
+    # 正規化後に小数点を含む数値を収集
     floats = [f for f in (_safe_float(t) for t in texts
                            if re.match(r'^\d+\.\d+$', t))
               if f is not None]
@@ -246,12 +252,13 @@ def _parse_race_card_fallback(soup, existing_racers):
                     if m:
                         d.setdefault('racer_no', m.group(1))
 
-        for t in texts:
-            if t in _CLASS_MAP and 'class_rank' not in d:
-                d['class_rank'] = _CLASS_MAP[t]
+        norm_texts = [_normalize(t) for t in texts]
+        for nt in norm_texts:
+            if nt in _CLASS_MAP and 'class_rank' not in d:
+                d['class_rank'] = _CLASS_MAP[nt]
 
-        # 小数点数値を収集（ST平均 0.05〜0.35 の範囲を除外）
-        floats = [f for f in (_safe_float(t) for t in texts
+        # 全角正規化後に小数点数値を収集（ST平均 0.05〜0.49 の範囲を除外）
+        floats = [f for f in (_safe_float(t) for t in norm_texts
                                if re.match(r'^\d+\.\d+$', t))
                   if f is not None and not (0.01 <= f <= 0.49)]
         _assign_rates(d, floats)
