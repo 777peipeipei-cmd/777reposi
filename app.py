@@ -184,12 +184,11 @@ def _build_race(item, predictor, date_str):
     """
     ddl, minutes, jcd, venue_name, race_no = item
 
-    racers = scraper.get_race_card(race_no, jcd, date_str)
+    # 出走表・直前情報・オッズを並列取得
+    racers, before, odds_map = scraper.get_race_bundle(race_no, jcd, date_str)
     if not racers:
         return None
 
-    before = scraper.get_before_info(race_no, jcd, date_str)
-    odds_map = scraper.get_win_odds(race_no, jcd, date_str)
     odds_available = bool(odds_map)
 
     X = feat.build_race_matrix(racers, before, jcd)

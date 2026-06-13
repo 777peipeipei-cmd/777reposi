@@ -513,7 +513,7 @@ function renderBoatRow(b, race) {
         <div class="val-label">オッズ</div>
       </div>
       <div class="val-col">
-        <div class="val-main ${b.win_prob >= 0.5 ? 'hi-prob' : ''}">${prob}</div>
+        <div class="val-main ${b.win_prob >= (_data.prob_threshold || 0.3) ? 'hi-prob' : ''}">${prob}</div>
         <div class="val-label">予測勝率</div>
       </div>
     </div>`;

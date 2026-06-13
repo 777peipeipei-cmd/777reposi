@@ -32,14 +32,14 @@ HEADERS = {
 }
 
 ODDS_THRESHOLD = 100.0      # 単勝オッズの閾値
-WIN_PROB_THRESHOLD = 0.50   # 予測勝率の閾値
+WIN_PROB_THRESHOLD = 0.30   # 予測勝率の閾値（30%以上）
 IMMINENT_WINDOW_MIN = 5     # 「締切間近(直近5分前)」と判定する分数
 CLOSED_GRACE_MIN = 2        # 締切後この分数までは「実施中」として残す
-FETCH_WINDOW_MIN = 120      # 締切がこの分数以内のレースだけ取得（近いレース優先）
+FETCH_WINDOW_MIN = 60       # 締切がこの分数以内のレースだけ取得（直近に絞り高速化）
 MAX_FETCH_RACES = 18        # 一度に取得する最大レース数（暴走防止・速度優先）
 FALLBACK_RACES = 3          # 締切時刻が取れない場合に取得する先頭レース数
-REQUEST_DELAY = 0.15        # リクエスト間隔（秒）※並列取得のため短縮
-FETCH_WORKERS = 6           # 並列取得スレッド数（速度↑・多すぎるとブロック注意）
+REQUEST_DELAY = 0.2         # リクエスト間隔（秒）※スレッド毎の待機
+FETCH_WORKERS = 4           # レース単位の並列数（各レース内でさらに3並列）
 MODEL_PATH = 'models/rf_model.pkl'
 DATA_DIR = 'data'
 MAX_RACES = 12

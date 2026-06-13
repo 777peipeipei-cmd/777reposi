@@ -4,6 +4,7 @@ import time
 import logging
 import threading
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import requests
@@ -29,8 +30,8 @@ def _get_session():
         with _session_lock:
             if _session is None:
                 s = requests.Session()
-                # 並列取得に備えて接続プールを拡張
-                pool = getattr(config, 'FETCH_WORKERS', 6) + 2
+                # 並列取得に備えて接続プールを拡張（レース並列×レース内3並列）
+                pool = getattr(config, 'FETCH_WORKERS', 4) * 3 + 4
                 adapter = requests.adapters.HTTPAdapter(
                     pool_connections=pool, pool_maxsize=pool, max_retries=1)
                 s.mount('https://', adapter)
@@ -401,6 +402,21 @@ def get_win_odds(race_no, jcd, date_str):
         logger.info('odds jcd=%s %dR: オッズ未取得（発売前の可能性）', jcd, race_no)
 
     return odds
+
+
+def get_race_bundle(race_no, jcd, date_str):
+    """
+    出走表・直前情報・単勝オッズを並列取得して返す（速度改善）。
+    Returns (racers, before, odds_map)
+    """
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f_card   = ex.submit(get_race_card,   race_no, jcd, date_str)
+        f_before = ex.submit(get_before_info, race_no, jcd, date_str)
+        f_odds   = ex.submit(get_win_odds,    race_no, jcd, date_str)
+        racers = f_card.result()
+        before = f_before.result()
+        odds   = f_odds.result()
+    return racers, before, odds
 
 
 def get_race_result(race_no, jcd, date_str):
