@@ -143,8 +143,9 @@ def _fetch_all(date_str):
 
             before = scraper.get_before_info(race_no, jcd, date_str)
             odds_map = scraper.get_win_odds(race_no, jcd, date_str)
-            if not odds_map:
-                continue
+            odds_available = bool(odds_map)
+            if not odds_available:
+                logger.info('  → オッズ未公開（出走表のみ表示）')
 
             X = feat.build_race_matrix(racers, before, jcd)
             probs = predictor.predict_proba(X)
@@ -154,7 +155,7 @@ def _fetch_all(date_str):
             has_hit = False
             for i, racer in enumerate(racers):
                 boat_no = racer.get('boat_no', i + 1)
-                odds = odds_map.get(boat_no)
+                odds = odds_map.get(boat_no) if odds_available else None
                 win_prob = float(probs[i])
                 conf_pct, conf_label = mdl.compute_confidence(
                     racer, before, boat_no, win_prob, all_probs, predictor.name)
@@ -164,18 +165,19 @@ def _fetch_all(date_str):
                     has_hit = True
 
                 boats.append({
-                    'boat_no':          boat_no,
-                    'racer':            racer.get('racer_name', '不明'),
-                    'class':            _cls(racer.get('class_rank')),
+                    'boat_no':           boat_no,
+                    'racer':             racer.get('racer_name', '不明'),
+                    'class':             _cls(racer.get('class_rank')),
                     'national_win_rate': racer.get('national_win_rate'),
-                    'course':           before['course_positions'].get(boat_no, boat_no),
-                    'ex_time':          before['exhibition_times'].get(boat_no),
-                    'motor_rate':       racer.get('motor_top2_rate'),
-                    'odds':             odds,
-                    'win_prob':         win_prob,
-                    'confidence':       conf_pct,
-                    'conf_label':       conf_label,
-                    'hit':              hit,
+                    'course':            before['course_positions'].get(boat_no, boat_no),
+                    'ex_time':           before['exhibition_times'].get(boat_no),
+                    'motor_rate':        racer.get('motor_top2_rate'),
+                    'odds':              odds,
+                    'odds_available':    odds_available,
+                    'win_prob':          win_prob,
+                    'confidence':        conf_pct,
+                    'conf_label':        conf_label,
+                    'hit':               hit,
                 })
 
             # 締切までの残り分（取得時点で再計算）

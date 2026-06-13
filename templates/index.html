@@ -87,6 +87,7 @@
     .val-label { font-size: 10px; color: var(--sub); }
     .hi-odds { color: var(--odds-hi); }
     .hi-prob { color: var(--prob-hi); }
+    .odds-pending { color: var(--sub); font-size: 12px; }
 
     /* 信頼確度タグ */
     .conf-tag { font-size: 10px; font-weight: bold; margin-top: 1px; white-space: nowrap; }
@@ -280,14 +281,16 @@ function render() {
 
   const hitOnly = document.getElementById('hit-only').checked;
   const imminentOnly = document.getElementById('imminent-only').checked;
+  const fetching = _data.status === 'fetching';
   let races = (_data.races || []);
   if (hitOnly) races = races.filter(r => r.has_hit);
-  if (imminentOnly) races = races.filter(r => r.imminent);
+  // 取得中はimminentフィルターを外して見せる（取得完了後に適用）
+  if (imminentOnly && !fetching) races = races.filter(r => r.imminent);
 
   if (races.length === 0) {
     let empty;
-    if (_data.status === 'fetching') {
-      empty = `<div class="loading"><div class="spinner"></div><div>${_data.progress || 'データ取得中...'}<br><small>締切が近いレースから順次表示されます</small></div></div>`;
+    if (fetching) {
+      empty = `<div class="loading"><div class="spinner"></div><div>${_data.progress || 'データ取得中...'}<br><small>出走表を取得できたレースから順次表示されます</small></div></div>`;
     } else if (imminentOnly) {
       empty = `<div class="empty">⏱ 締切${_data.imminent_window}分前のレースは今ありません</div>`;
     } else if (hitOnly) {
@@ -343,7 +346,7 @@ function renderRace(race, hitOnly) {
     const ex  = b.ex_time ? b.ex_time.toFixed(2) : '--.--';
     const mtr = b.motor_rate ? (b.motor_rate * 100).toFixed(1) + '%' : '--';
     const nwr = b.national_win_rate ? b.national_win_rate.toFixed(2) : '--';
-    const odds = b.odds ? b.odds.toFixed(1) : '---';
+    const oddsStr = b.odds ? b.odds.toFixed(1) : (b.odds_available === false ? '未公開' : '---');
     const prob = (b.win_prob * 100).toFixed(1) + '%';
     const conf = (b.confidence !== undefined && b.confidence !== null) ? b.confidence : null;
     const confLabel = b.conf_label || '--';
@@ -360,7 +363,7 @@ function renderRace(race, hitOnly) {
           <div class="racer-sub">${b.class} 勝率${nwr} | ${b.course}コース 展示${ex} | モーター${mtr}</div>
         </div>
         <div class="val-col">
-          <div class="val-main ${b.odds >= 100 ? 'hi-odds' : ''}">${odds}倍</div>
+          <div class="val-main ${b.odds >= 100 ? 'hi-odds' : (b.odds_available === false ? 'odds-pending' : '')}">${oddsStr}${b.odds ? '倍' : ''}</div>
           <div class="val-label">オッズ</div>
         </div>
         <div class="val-col">
