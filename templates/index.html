@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>🚤 競艇予想</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #fff;
+      --border: #e0e0e0;
+      --primary: #1565c0;
+      --primary-dark: #0d47a1;
+      --hit-bg: #fffde7;
+      --hit-border: #f9a825;
+      --text: #212121;
+      --sub: #757575;
+      --odds-hi: #e65100;
+      --prob-hi: #1b5e20;
+      --venue-bg: #1565c0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212; --card: #1e1e1e; --border: #333;
+        --primary: #5c8fdb; --primary-dark: #1a237e;
+        --hit-bg: #2d2300; --hit-border: #f9a825;
+        --text: #e0e0e0; --sub: #9e9e9e;
+        --odds-hi: #ffb74d; --prob-hi: #81c784;
+        --venue-bg: #0d47a1;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; font-size: 14px; }
+
+    /* ヘッダー */
+    .header { background: var(--primary-dark); color: #fff; padding: 14px 16px; position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+    .header h1 { font-size: 18px; letter-spacing: .5px; }
+    .header-right { text-align: right; }
+    .header-right .model-name { font-size: 11px; opacity: .75; }
+    .header-right .updated { font-size: 11px; opacity: .75; }
+
+    /* サブバー */
+    .subbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 8px 12px; display: flex; gap: 12px; align-items: center; font-size: 12px; flex-wrap: wrap; }
+    .condition-badge { background: var(--primary-dark); color: #fff; padding: 3px 8px; border-radius: 12px; font-size: 11px; white-space: nowrap; }
+    .filter-label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--sub); }
+    .filter-label input { cursor: pointer; width: 16px; height: 16px; }
+    .refresh-btn { margin-left: auto; background: var(--primary); color: #fff; border: none; padding: 6px 14px; border-radius: 16px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .refresh-btn:active { opacity: .7; }
+
+    /* コンテンツ */
+    .container { max-width: 640px; margin: 0 auto; padding: 8px; }
+
+    /* 場ヘッダー */
+    .venue-block { margin-top: 12px; }
+    .venue-header { background: var(--venue-bg); color: #fff; padding: 9px 14px; border-radius: 10px 10px 0 0; font-size: 15px; font-weight: bold; }
+
+    /* レースカード */
+    .race-card { background: var(--card); border: 1px solid var(--border); border-top: none; }
+    .race-card:last-child { border-radius: 0 0 10px 10px; }
+    .race-header { padding: 7px 14px; background: rgba(21,101,192,.08); border-top: 1px solid var(--border); font-size: 13px; font-weight: bold; color: var(--primary); display: flex; align-items: center; gap: 6px; }
+    .hit-star { color: var(--hit-border); }
+
+    /* 艇行 */
+    .boat-row { display: grid; grid-template-columns: 32px 1fr 60px 54px; gap: 6px; padding: 9px 12px; border-top: 1px solid var(--border); align-items: center; }
+    .boat-row.hit { background: var(--hit-bg); border-left: 4px solid var(--hit-border); padding-left: 10px; }
+
+    .boat-circle { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: #fff; flex-shrink: 0; }
+    .c1{background:#e53935;} .c2{background:#1e88e5;} .c3{background:#fb8c00;} .c4{background:#43a047;} .c5{background:#212121;} .c6{background:#9e9e9e;}
+
+    .racer-info { overflow: hidden; }
+    .racer-name { font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+    .hit-badge { background: var(--hit-border); color: #fff; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: bold; flex-shrink: 0; }
+    .racer-sub { font-size: 11px; color: var(--sub); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .val-col { text-align: right; }
+    .val-main { font-size: 14px; font-weight: bold; }
+    .val-label { font-size: 10px; color: var(--sub); }
+    .hi-odds { color: var(--odds-hi); }
+    .hi-prob { color: var(--prob-hi); }
+
+    /* ローディング・エラー・空 */
+    .loading { text-align: center; padding: 48px 16px; color: var(--sub); }
+    .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-box { background: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; padding: 16px; margin: 12px; color: #b71c1c; line-height: 1.6; font-size: 13px; }
+    .empty { text-align: center; padding: 40px 16px; color: var(--sub); font-size: 15px; }
+
+    /* 自動更新インジケーター */
+    .auto-badge { display: inline-block; width: 8px; height: 8px; background: #4caf50; border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🚤 競艇予想</h1>
+  <div class="header-right">
+    <div class="model-name" id="model-name">読み込み中...</div>
+    <div class="updated" id="updated-time"></div>
+  </div>
+</div>
+
+<div class="subbar">
+  <span class="condition-badge" id="cond-badge">条件取得中...</span>
+  <label class="filter-label">
+    <input type="checkbox" id="hit-only" onchange="render()">
+    ★のみ
+  </label>
+  <span class="auto-badge" title="3分ごと自動更新"></span>
+  <button class="refresh-btn" onclick="load(true)">今すぐ更新</button>
+</div>
+
+<div class="container" id="app">
+  <div class="loading">
+    <div class="spinner"></div>
+    <div>データ取得中...</div>
+  </div>
+</div>
+
+<script>
+const DATE = '{{ date }}';
+let _data = null;
+
+async function load(force = false) {
+  const url = `/api/predictions?date=${DATE}${force ? '&force=1' : ''}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    _data = await res.json();
+    render();
+  } catch (e) {
+    document.getElementById('app').innerHTML =
+      `<div class="error-box">
+        ❌ エラー: ${e.message}<br><br>
+        boatrace.jp に接続できません。<br>
+        <strong>自宅のWi-Fiに接続したPC/Mac</strong>でこのサーバーを起動してください。
+      </div>`;
+  }
+}
+
+function render() {
+  if (!_data) return;
+
+  // ヘッダー更新
+  document.getElementById('model-name').textContent = `モデル: ${_data.model}`;
+  document.getElementById('updated-time').textContent = `更新: ${_data.updated}`;
+  document.getElementById('cond-badge').textContent =
+    `オッズ>${_data.odds_threshold}倍 かつ 予測勝率>${(_data.prob_threshold * 100).toFixed(0)}%`;
+
+  if (_data.error) {
+    document.getElementById('app').innerHTML = `<div class="error-box">❌ ${_data.error}</div>`;
+    return;
+  }
+
+  const hitOnly = document.getElementById('hit-only').checked;
+  const races = (_data.races || []).filter(r => !hitOnly || r.has_hit);
+
+  if (races.length === 0) {
+    document.getElementById('app').innerHTML =
+      `<div class="empty">${hitOnly ? '⭐ 条件を満たす艇はまだありません' : 'レースデータがありません'}</div>`;
+    return;
+  }
+
+  // 場ごとにまとめる
+  const venues = {};
+  for (const r of races) {
+    if (!venues[r.jcd]) venues[r.jcd] = { name: r.venue, races: [] };
+    venues[r.jcd].races.push(r);
+  }
+
+  let html = '';
+  for (const v of Object.values(venues)) {
+    html += `<div class="venue-block"><div class="venue-header">📍 ${v.name}</div>`;
+    for (const race of v.races) html += renderRace(race, hitOnly);
+    html += '</div>';
+  }
+  document.getElementById('app').innerHTML = html;
+}
+
+function renderRace(race, hitOnly) {
+  const boats = hitOnly ? race.boats.filter(b => b.hit) : race.boats;
+  let html = `<div class="race-card">
+    <div class="race-header">
+      ${race.race_no}R
+      ${race.has_hit ? '<span class="hit-star">⭐</span>' : ''}
+    </div>`;
+
+  for (const b of boats) {
+    const ex  = b.ex_time ? b.ex_time.toFixed(2) : '--.--';
+    const mtr = b.motor_rate ? (b.motor_rate * 100).toFixed(1) + '%' : '--';
+    const nwr = b.national_win_rate ? b.national_win_rate.toFixed(2) : '--';
+    const odds = b.odds ? b.odds.toFixed(1) : '---';
+    const prob = (b.win_prob * 100).toFixed(1) + '%';
+
+    html += `
+      <div class="boat-row ${b.hit ? 'hit' : ''}">
+        <div class="boat-circle c${b.boat_no}">${b.boat_no}</div>
+        <div class="racer-info">
+          <div class="racer-name">
+            ${escHtml(b.racer)}
+            ${b.hit ? '<span class="hit-badge">★HIT</span>' : ''}
+          </div>
+          <div class="racer-sub">${b.class} 勝率${nwr} | ${b.course}コース 展示${ex} | モーター${mtr}</div>
+        </div>
+        <div class="val-col">
+          <div class="val-main ${b.odds >= 100 ? 'hi-odds' : ''}">${odds}倍</div>
+          <div class="val-label">オッズ</div>
+        </div>
+        <div class="val-col">
+          <div class="val-main ${b.win_prob >= 0.5 ? 'hi-prob' : ''}">${prob}</div>
+          <div class="val-label">予測</div>
+        </div>
+      </div>`;
+  }
+  return html + '</div>';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+load();
+setInterval(() => load(), 3 * 60 * 1000); // 3分ごと自動更新
+</script>
+</body>
+</html>
