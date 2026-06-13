@@ -180,21 +180,27 @@ def _fetch_all(date_str):
                     'hit':               hit,
                 })
 
+            # 3連単予測（Harville式）
+            boat_nos_list  = [b['boat_no']  for b in boats]
+            win_probs_list = [b['win_prob'] for b in boats]
+            trifecta = mdl.predict_trifecta(win_probs_list, boat_nos_list, top_n=6)
+
             # 締切までの残り分（取得時点で再計算）
             mins_left = None
             if ddl is not None:
                 mins_left = round((ddl - datetime.now()).total_seconds() / 60.0)
 
             race = {
-                'jcd':         jcd,
-                'venue':       venue_name,
-                'race_no':     race_no,
-                'deadline':    ddl.strftime('%H:%M') if ddl else None,
+                'jcd':          jcd,
+                'venue':        venue_name,
+                'race_no':      race_no,
+                'deadline':     ddl.strftime('%H:%M') if ddl else None,
                 'minutes_left': mins_left,
-                'imminent':    bool(mins_left is not None
-                                    and -config.CLOSED_GRACE_MIN <= mins_left <= config.IMMINENT_WINDOW_MIN),
-                'boats':       boats,
-                'has_hit':     has_hit,
+                'imminent':     bool(mins_left is not None
+                                     and -config.CLOSED_GRACE_MIN <= mins_left <= config.IMMINENT_WINDOW_MIN),
+                'boats':        boats,
+                'has_hit':      has_hit,
+                'trifecta':     trifecta,
             }
             with _lock:
                 _state['races'].append(race)

@@ -97,6 +97,60 @@ class MLPredictor:
 
 
 # ---------------------------------------------------------------------------
+# 3連単予測（Harville式）
+# ---------------------------------------------------------------------------
+
+def predict_trifecta(win_probs, boat_nos, top_n=6):
+    """
+    Harville式で3連単の組み合わせ確率を計算し、上位 top_n を返す。
+
+    win_probs : list[float] — 各艇の予測勝率（合計≒1）
+    boat_nos  : list[int]   — 対応する艇番（同インデックス）
+    Returns   : list of dict {combo, prob, label}
+    """
+    n = len(win_probs)
+    results = []
+
+    for i in range(n):
+        p1 = win_probs[i]
+        if p1 <= 0:
+            continue
+        rem1 = 1.0 - p1
+        if rem1 <= 0:
+            continue
+        for j in range(n):
+            if j == i:
+                continue
+            p2 = win_probs[j] / rem1
+            rem2 = rem1 - win_probs[j]
+            if rem2 <= 0:
+                continue
+            for k in range(n):
+                if k == i or k == j:
+                    continue
+                p3 = win_probs[k] / rem2
+                prob = p1 * p2 * p3
+                results.append({
+                    'combo': [boat_nos[i], boat_nos[j], boat_nos[k]],
+                    'prob':  round(prob * 100, 2),
+                })
+
+    results.sort(key=lambda x: -x['prob'])
+    top = results[:top_n]
+
+    # ラベル：最有力/有力/参考
+    for idx, r in enumerate(top):
+        if idx == 0:
+            r['label'] = '最有力'
+        elif idx <= 1:
+            r['label'] = '有力'
+        else:
+            r['label'] = '参考'
+
+    return top
+
+
+# ---------------------------------------------------------------------------
 # モデルロード
 # ---------------------------------------------------------------------------
 

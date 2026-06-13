@@ -95,6 +95,21 @@
     .conf-mid { color: #ef6c00; }
     .conf-lo  { color: #9e9e9e; }
 
+    /* 3連単ボックス */
+    .trifecta-box { padding: 8px 12px 10px; border-top: 2px solid var(--primary); background: rgba(21,101,192,.04); }
+    .trifecta-title { font-size: 11px; font-weight: bold; color: var(--primary); margin-bottom: 6px; }
+    .trifecta-list { display: flex; flex-direction: column; gap: 4px; }
+    .trifecta-row { display: flex; align-items: center; gap: 6px; }
+    .trifecta-rank { width: 16px; font-size: 10px; color: var(--sub); flex-shrink: 0; text-align: right; }
+    .trifecta-combo { display: flex; align-items: center; gap: 3px; }
+    .t-boat { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: #fff; flex-shrink: 0; }
+    .trifecta-arrow { font-size: 10px; color: var(--sub); }
+    .trifecta-prob { margin-left: auto; font-size: 12px; font-weight: bold; color: var(--primary); }
+    .trifecta-label { font-size: 10px; padding: 1px 5px; border-radius: 6px; font-weight: bold; flex-shrink: 0; }
+    .lbl-top   { background: #f9a825; color: #fff; }
+    .lbl-good  { background: #1565c0; color: #fff; }
+    .lbl-ref   { background: #e0e0e0; color: #555; }
+
     /* ローディング・エラー・空 */
     .loading { text-align: center; padding: 48px 16px; color: var(--sub); }
     .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: 12px; }
@@ -372,6 +387,28 @@ function renderRace(race, hitOnly) {
         </div>
       </div>`;
   }
+
+  // 3連単セクション
+  if (race.trifecta && race.trifecta.length > 0) {
+    html += `<div class="trifecta-box">
+      <div class="trifecta-title">🎯 3連単おすすめ（予測確率順・最大6点）</div>
+      <div class="trifecta-list">`;
+    race.trifecta.forEach((t, idx) => {
+      const lbl = t.label === '最有力' ? 'lbl-top' : (t.label === '有力' ? 'lbl-good' : 'lbl-ref');
+      const boats = t.combo.map(n =>
+        `<div class="t-boat c${n}">${n}</div>`
+      ).join('<span class="trifecta-arrow">→</span>');
+      html += `
+        <div class="trifecta-row">
+          <div class="trifecta-rank">${idx + 1}</div>
+          <div class="trifecta-combo">${boats}</div>
+          <span class="trifecta-label ${lbl}">${t.label}</span>
+          <div class="trifecta-prob">${t.prob}%</div>
+        </div>`;
+    });
+    html += `</div></div>`;
+  }
+
   return html + '</div>';
 }
 
