@@ -100,6 +100,53 @@ class MLPredictor:
 # モデルロード
 # ---------------------------------------------------------------------------
 
+def compute_confidence(racer, before, boat_no, win_prob, all_probs, model_name):
+    """
+    予測の信頼確度（0〜100）とラベル（高/中/低）を返す。
+
+    評価要素:
+      1. データ完全性  : 展示タイム・モーター・勝率・進入コースが揃っているか
+      2. 予測の余裕    : 予測勝率が50%からどれだけ離れているか
+      3. 支配度        : 1番手と2番手の予測勝率差
+      4. モデル係数    : 学習済みML > ルールベース
+    """
+    # 1. データ完全性（4項目）
+    present = 0
+    if before['exhibition_times'].get(boat_no) is not None:
+        present += 1
+    if racer.get('motor_top2_rate') is not None:
+        present += 1
+    if racer.get('national_win_rate') is not None:
+        present += 1
+    if before['course_positions'].get(boat_no) is not None:
+        present += 1
+    completeness = present / 4.0
+
+    # 2. 予測の余裕（勝率0.5→0, 1.0→1.0）
+    margin = min(max(win_prob - 0.5, 0.0) / 0.5, 1.0)
+
+    # 3. 支配度（1位と2位の差。0.4差で満点）
+    sorted_p = sorted(all_probs, reverse=True)
+    top = sorted_p[0]
+    second = sorted_p[1] if len(sorted_p) > 1 else 0.0
+    dominance = min(max(top - second, 0.0) / 0.4, 1.0)
+
+    # 4. モデル係数
+    base = 1.0 if model_name == 'RandomForest' else 0.75
+
+    score = base * (0.35 * completeness + 0.35 * margin + 0.30 * dominance)
+    pct = round(score * 100, 1)
+
+    if pct >= 65:
+        label = '高'
+    elif pct >= 40:
+        label = '中'
+    else:
+        label = '低'
+
+    return pct, label
+
+
 def load_predictor():
     """学習済みモデルがあれば MLPredictor、なければ RuleBasedPredictor を返す"""
     if os.path.exists(config.MODEL_PATH):

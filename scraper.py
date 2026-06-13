@@ -284,6 +284,35 @@ def _largest_table(soup):
     return best
 
 
+def get_race_deadlines(jcd, date_str):
+    """
+    その場の各レースの投票締切予定時刻を取得する。
+    Returns dict {race_no: 'HH:MM'}
+    """
+    soup = _fetch(f'{config.BASE_URL}/raceindex', {'jcd': jcd, 'hd': date_str})
+    if not soup:
+        return {}
+
+    deadlines = {}
+    for table in soup.find_all('table'):
+        for row in table.find_all('tr'):
+            cells = row.find_all(['td', 'th'])
+            texts = [c.get_text(strip=True) for c in cells]
+            race_no = None
+            time_str = None
+            for t in texts:
+                m = re.match(r'^(\d{1,2})R$', t)
+                if m:
+                    race_no = int(m.group(1))
+                m2 = re.match(r'^(\d{1,2}):(\d{2})$', t)
+                if m2:
+                    time_str = t
+            if race_no and time_str and 1 <= race_no <= config.MAX_RACES:
+                deadlines.setdefault(race_no, time_str)
+
+    return deadlines
+
+
 def _empty_before():
     return {
         'exhibition_times': {},

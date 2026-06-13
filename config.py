@@ -33,6 +33,8 @@ HEADERS = {
 
 ODDS_THRESHOLD = 100.0      # 単勝オッズの閾値
 WIN_PROB_THRESHOLD = 0.50   # 予測勝率の閾値
+IMMINENT_WINDOW_MIN = 5     # 「締切間近(直近5分前)」と判定する分数
+CLOSED_GRACE_MIN = 2        # 締切後この分数までは「実施中」として残す
 REQUEST_DELAY = 0.5         # リクエスト間隔（秒）
 MODEL_PATH = 'models/rf_model.pkl'
 DATA_DIR = 'data'

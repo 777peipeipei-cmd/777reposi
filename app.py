@@ -10,6 +10,7 @@
 スマホから: http://<PCのIPアドレス>:5000
 """
 import logging
+import re
 import threading
 import time
 from datetime import datetime
@@ -44,8 +45,51 @@ def _cls(rank):
     return {4: 'A1', 3: 'A2', 2: 'B1', 1: 'B2'}.get(rank, '??')
 
 
+def _parse_deadline(time_str, now):
+    """'HH:MM' を今日の datetime に変換。失敗時 None"""
+    m = re.match(r'^(\d{1,2}):(\d{2})$', time_str or '')
+    if not m:
+        return None
+    try:
+        return now.replace(hour=int(m.group(1)), minute=int(m.group(2)),
+                           second=0, microsecond=0)
+    except ValueError:
+        return None
+
+
+def _collect_pending_races(venues, date_str, now):
+    """
+    実施中の場の「まだ締切前（実施中）」レースを締切時刻順に並べて返す。
+    Returns list of (deadline_dt|None, minutes_to_close|None, jcd, venue, race_no)
+    """
+    pending = []
+    for jcd in venues:
+        venue_name = config.VENUES.get(jcd, jcd)
+        deadlines = scraper.get_race_deadlines(jcd, date_str)
+
+        if not deadlines:
+            # 締切時刻が取れない場合は全レースを対象（時刻不明）
+            for rno in range(1, config.MAX_RACES + 1):
+                pending.append((None, None, jcd, venue_name, rno))
+            continue
+
+        for rno, tstr in deadlines.items():
+            ddl = _parse_deadline(tstr, now)
+            if ddl is None:
+                pending.append((None, None, jcd, venue_name, rno))
+                continue
+            minutes = (ddl - now).total_seconds() / 60.0
+            # 締切後 CLOSED_GRACE_MIN 分を過ぎたレース（実施済み）は除外
+            if minutes >= -config.CLOSED_GRACE_MIN:
+                pending.append((ddl, minutes, jcd, venue_name, rno))
+
+    # 締切が近い順（時刻不明は末尾）
+    pending.sort(key=lambda x: (x[0] is None, x[0] or now))
+    return pending
+
+
 def _fetch_all(date_str):
-    """バックグラウンドスレッドで全場のデータを取得する"""
+    """バックグラウンドスレッドで、実施中レースを締切が近い順に取得する"""
     predictor = mdl.load_predictor()
 
     with _lock:
@@ -59,62 +103,84 @@ def _fetch_all(date_str):
             _state['error'] = 'boatrace.jp から開催情報を取得できませんでした。'
         return
 
-    for jcd in venues:
-        venue_name = config.VENUES.get(jcd, jcd)
-        for race_no in range(1, config.MAX_RACES + 1):
+    now = datetime.now()
+    pending = _collect_pending_races(venues, date_str, now)
+
+    if not pending:
+        with _lock:
+            _state['status'] = 'done'
+            _state['progress'] = ''
+            _state['error'] = '実施中（締切前）のレースがありません。本日の開催が終了している可能性があります。'
+        return
+
+    for ddl, minutes, jcd, venue_name, race_no in pending:
+        with _lock:
+            _state['progress'] = f'{venue_name} {race_no}R 取得中...'
+
+        try:
+            racers = scraper.get_race_card(race_no, jcd, date_str)
+            if not racers:
+                continue
+
+            before = scraper.get_before_info(race_no, jcd, date_str)
+            odds_map = scraper.get_win_odds(race_no, jcd, date_str)
+            if not odds_map:
+                continue
+
+            X = feat.build_race_matrix(racers, before, jcd)
+            probs = predictor.predict_proba(X)
+            all_probs = [float(p) for p in probs]
+
+            boats = []
+            has_hit = False
+            for i, racer in enumerate(racers):
+                boat_no = racer.get('boat_no', i + 1)
+                odds = odds_map.get(boat_no)
+                win_prob = float(probs[i])
+                conf_pct, conf_label = mdl.compute_confidence(
+                    racer, before, boat_no, win_prob, all_probs, predictor.name)
+                hit = bool(odds and odds >= config.ODDS_THRESHOLD
+                           and win_prob >= config.WIN_PROB_THRESHOLD)
+                if hit:
+                    has_hit = True
+
+                boats.append({
+                    'boat_no':          boat_no,
+                    'racer':            racer.get('racer_name', '不明'),
+                    'class':            _cls(racer.get('class_rank')),
+                    'national_win_rate': racer.get('national_win_rate'),
+                    'course':           before['course_positions'].get(boat_no, boat_no),
+                    'ex_time':          before['exhibition_times'].get(boat_no),
+                    'motor_rate':       racer.get('motor_top2_rate'),
+                    'odds':             odds,
+                    'win_prob':         win_prob,
+                    'confidence':       conf_pct,
+                    'conf_label':       conf_label,
+                    'hit':              hit,
+                })
+
+            # 締切までの残り分（取得時点で再計算）
+            mins_left = None
+            if ddl is not None:
+                mins_left = round((ddl - datetime.now()).total_seconds() / 60.0)
+
+            race = {
+                'jcd':         jcd,
+                'venue':       venue_name,
+                'race_no':     race_no,
+                'deadline':    ddl.strftime('%H:%M') if ddl else None,
+                'minutes_left': mins_left,
+                'imminent':    bool(mins_left is not None
+                                    and -config.CLOSED_GRACE_MIN <= mins_left <= config.IMMINENT_WINDOW_MIN),
+                'boats':       boats,
+                'has_hit':     has_hit,
+            }
             with _lock:
-                _state['progress'] = f'{venue_name} {race_no}R 取得中...'
+                _state['races'].append(race)
+                _state['updated'] = datetime.now().strftime('%H:%M:%S')
 
-            try:
-                racers = scraper.get_race_card(race_no, jcd, date_str)
-                if not racers:
-                    break
-
-                before = scraper.get_before_info(race_no, jcd, date_str)
-                odds_map = scraper.get_win_odds(race_no, jcd, date_str)
-                if not odds_map:
-                    continue
-
-                X = feat.build_race_matrix(racers, before, jcd)
-                probs = predictor.predict_proba(X)
-
-                boats = []
-                has_hit = False
-                for i, racer in enumerate(racers):
-                    boat_no = racer.get('boat_no', i + 1)
-                    odds = odds_map.get(boat_no)
-                    win_prob = float(probs[i])
-                    hit = bool(odds and odds >= config.ODDS_THRESHOLD
-                               and win_prob >= config.WIN_PROB_THRESHOLD)
-                    if hit:
-                        has_hit = True
-
-                    boats.append({
-                        'boat_no':          boat_no,
-                        'racer':            racer.get('racer_name', '不明'),
-                        'class':            _cls(racer.get('class_rank')),
-                        'national_win_rate': racer.get('national_win_rate'),
-                        'course':           before['course_positions'].get(boat_no, boat_no),
-                        'ex_time':          before['exhibition_times'].get(boat_no),
-                        'motor_rate':       racer.get('motor_top2_rate'),
-                        'odds':             odds,
-                        'win_prob':         win_prob,
-                        'hit':              hit,
-                    })
-
-                race = {
-                    'jcd':     jcd,
-                    'venue':   venue_name,
-                    'race_no': race_no,
-                    'boats':   boats,
-                    'has_hit': has_hit,
-                }
-                with _lock:
-                    _state['races'].append(race)
-                    _state['updated'] = datetime.now().strftime('%H:%M:%S')
-
-            except Exception as e:
-                logger.warning('%s %dR エラー: %s', venue_name, race_no, e)
+        except Exception as e:
+            logger.warning('%s %dR エラー: %s', venue_name, race_no, e)
 
     with _lock:
         _state['status'] = 'done'
@@ -157,6 +223,7 @@ def api_predictions():
             'progress':        _state['progress'],
             'odds_threshold':  config.ODDS_THRESHOLD,
             'prob_threshold':  config.WIN_PROB_THRESHOLD,
+            'imminent_window': config.IMMINENT_WINDOW_MIN,
             'races':           list(_state['races']),
             'error':           _state['error'],
         })
