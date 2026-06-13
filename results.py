@@ -97,6 +97,19 @@ def fill_result(jcd, race_no, date_str):
     return True
 
 
+def get_saved_result(jcd, race_no, date_str):
+    """予測ファイルに保存済みの結果を返す（なければ None）"""
+    key = _race_key(jcd, race_no, date_str)
+    path = _PRED_DIR / f'{key}.json'
+    if not path.exists():
+        return None
+    try:
+        d = json.loads(path.read_text(encoding='utf-8'))
+        return d.get('result')  # {str(boat_no): rank} or None
+    except Exception:
+        return None
+
+
 def check_pending_results(date_str=None):
     """
     結果未取得の予測ファイルをすべてチェックして result を埋める。

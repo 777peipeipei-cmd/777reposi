@@ -159,7 +159,7 @@ def _fetch_all(date_str):
                 boat_no = racer.get('boat_no', i + 1)
                 odds = odds_map.get(boat_no) if odds_available else None
                 win_prob = float(probs[i])
-                raw_conf, _ = mdl.compute_confidence(
+                raw_conf, _, breakdown = mdl.compute_confidence(
                     racer, before, boat_no, win_prob, all_probs, predictor.name)
                 # キャリブレーション補正を適用
                 conf_pct   = res_tracker.calibrator.calibrate(raw_conf)
@@ -182,6 +182,7 @@ def _fetch_all(date_str):
                     'win_prob':          win_prob,
                     'confidence':        conf_pct,
                     'conf_label':        conf_label,
+                    'conf_breakdown':    breakdown,
                     'hit':               hit,
                 })
 
@@ -195,6 +196,13 @@ def _fetch_all(date_str):
             if ddl is not None:
                 mins_left = round((ddl - datetime.now()).total_seconds() / 60.0)
 
+            # 既存の結果（レース終了後に fill_result で書き込まれたもの）
+            result_data = None
+            try:
+                result_data = res_tracker.get_saved_result(jcd, race_no, date_str)
+            except Exception:
+                pass
+
             race = {
                 'jcd':          jcd,
                 'venue':        venue_name,
@@ -206,6 +214,7 @@ def _fetch_all(date_str):
                 'boats':        boats,
                 'has_hit':      has_hit,
                 'trifecta':     trifecta,
+                'result':       result_data,
             }
             # 予測を保存（後でキャリブレーションに使う）
             try:
@@ -230,14 +239,21 @@ def _fetch_all(date_str):
 
 
 def _update_calibration(date_str):
-    """バックグラウンドで結果照合 → キャリブレーション更新"""
+    """バックグラウンドで結果照合 → キャリブレーション更新 → ステートのresult反映"""
     try:
         filled = res_tracker.check_pending_results(date_str)
         if filled > 0:
             logger.info('結果照合: %d 件 → キャリブレーション更新', filled)
             res_tracker.calibrator.update_from_results()
-            with _lock:
-                _state['calib_stats'] = res_tracker.calibrator.stats()
+        with _lock:
+            _state['calib_stats'] = res_tracker.calibrator.stats()
+            # 結果が新たに取得されたレースをステートに反映
+            for race in _state['races']:
+                if race.get('result') is None:
+                    r = res_tracker.get_saved_result(
+                        race['jcd'], race['race_no'], date_str)
+                    if r:
+                        race['result'] = r
     except Exception as e:
         logger.warning('キャリブレーション更新エラー: %s', e)
 
@@ -305,6 +321,7 @@ def api_predictions():
             'odds_threshold':  config.ODDS_THRESHOLD,
             'prob_threshold':  config.WIN_PROB_THRESHOLD,
             'imminent_window': config.IMMINENT_WINDOW_MIN,
+            'closed_grace_min': config.CLOSED_GRACE_MIN,
             'races':           list(_state['races']),
             'error':           _state['error'],
             'calib_stats':     _state.get('calib_stats', []),

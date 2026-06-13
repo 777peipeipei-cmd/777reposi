@@ -156,7 +156,7 @@ def predict_trifecta(win_probs, boat_nos, top_n=6):
 
 def compute_confidence(racer, before, boat_no, win_prob, all_probs, model_name):
     """
-    予測の信頼確度（0〜100）とラベル（高/中/低）を返す。
+    予測の信頼確度（0〜100）とラベル（高/中/低）とブレークダウンを返す。
 
     評価要素:
       1. データ完全性  : 展示タイム・モーター・勝率・進入コースが揃っているか
@@ -191,14 +191,21 @@ def compute_confidence(racer, before, boat_no, win_prob, all_probs, model_name):
     score = base * (0.35 * completeness + 0.35 * margin + 0.30 * dominance)
     pct = round(score * 100, 1)
 
-    if pct >= 65:
-        label = '高'
-    elif pct >= 40:
-        label = '中'
-    else:
-        label = '低'
+    label = '高' if pct >= 65 else ('中' if pct >= 40 else '低')
 
-    return pct, label
+    breakdown = {
+        'completeness_items': present,
+        'completeness_score': round(0.35 * completeness * 100, 1),
+        'margin_score':       round(0.35 * margin * 100, 1),
+        'win_prob_pct':       round(win_prob * 100, 1),
+        'dominance_score':    round(0.30 * dominance * 100, 1),
+        'gap_pct':            round((top - second) * 100, 1),
+        'model_base':         base,
+        'model_name':         model_name,
+        'raw_score':          pct,
+    }
+
+    return pct, label, breakdown
 
 
 def load_predictor():

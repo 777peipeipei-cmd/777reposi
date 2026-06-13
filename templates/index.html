@@ -50,7 +50,7 @@
     .filter-label input { cursor: pointer; width: 16px; height: 16px; }
     .refresh-btn { background: var(--primary); color: #fff; border: none; padding: 6px 14px; border-radius: 16px; font-size: 12px; cursor: pointer; white-space: nowrap; }
     .refresh-btn:active { opacity: .7; }
-    .notify-btn { margin-left: auto; background: transparent; color: var(--sub); border: 1px solid var(--border); padding: 5px 12px; border-radius: 16px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .notify-btn { background: transparent; color: var(--sub); border: 1px solid var(--border); padding: 5px 12px; border-radius: 16px; font-size: 12px; cursor: pointer; white-space: nowrap; }
     .notify-btn.on { background: #2e7d32; color: #fff; border-color: #2e7d32; }
     .notify-btn:active { opacity: .7; }
 
@@ -71,10 +71,10 @@
     .badge-imminent { background: #d32f2f; color: #fff; padding: 1px 7px; border-radius: 8px; font-size: 10px; font-weight: bold; animation: pulse 1.5s ease-in-out infinite; }
 
     /* 艇行 */
-    .boat-row { display: grid; grid-template-columns: 32px 1fr 56px 60px; gap: 6px; padding: 9px 12px; border-top: 1px solid var(--border); align-items: center; }
+    .boat-row { display: grid; grid-template-columns: 32px 1fr 56px 56px; gap: 6px; padding: 9px 12px; border-top: 1px solid var(--border); align-items: start; }
     .boat-row.hit { background: var(--hit-bg); border-left: 4px solid var(--hit-border); padding-left: 10px; }
 
-    .boat-circle { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: #fff; flex-shrink: 0; }
+    .boat-circle { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; flex-shrink: 0; margin-top: 2px; }
     .c1{background:#fff;color:#333;border:2px solid #bbb;}
     .c2{background:#222;color:#fff;}
     .c3{background:#e53935;color:#fff;}
@@ -94,11 +94,25 @@
     .hi-prob { color: var(--prob-hi); }
     .odds-pending { color: var(--sub); font-size: 12px; }
 
-    /* 信頼確度タグ */
-    .conf-tag { font-size: 10px; font-weight: bold; margin-top: 1px; white-space: nowrap; }
-    .conf-hi  { color: #2e7d32; }
-    .conf-mid { color: #ef6c00; }
-    .conf-lo  { color: #9e9e9e; }
+    /* 信頼確度バッジ（Fix 1: 明確に表示） */
+    .conf-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: bold; cursor: pointer; margin-top: 2px; user-select: none; -webkit-tap-highlight-color: transparent; }
+    .conf-badge-hi  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+    .conf-badge-mid { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+    .conf-badge-lo  { background: #f5f5f5; color: #757575; border: 1px solid #e0e0e0; }
+    @media (prefers-color-scheme: dark) {
+      .conf-badge-hi  { background: #1b3a1f; color: #81c784; border-color: #388e3c; }
+      .conf-badge-mid { background: #3a2000; color: #ffb74d; border-color: #e65100; }
+      .conf-badge-lo  { background: #2a2a2a; color: #9e9e9e; border-color: #444; }
+    }
+
+    /* 信頼度内訳パネル（Fix 6: タップで表示） */
+    .conf-detail { display: none; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-top: 4px; font-size: 11px; }
+    .conf-detail.open { display: block; }
+    .conf-detail-row { display: flex; justify-content: space-between; padding: 2px 0; }
+    .conf-detail-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+    .conf-detail-label { color: var(--sub); }
+    .conf-detail-val { font-weight: bold; color: var(--text); }
+    .conf-detail-note { color: var(--sub); font-size: 10px; margin-top: 4px; }
 
     /* 3連単ボックス */
     .trifecta-box { padding: 8px 12px 10px; border-top: 2px solid var(--primary); background: rgba(21,101,192,.04); }
@@ -107,13 +121,24 @@
     .trifecta-row { display: flex; align-items: center; gap: 6px; }
     .trifecta-rank { width: 16px; font-size: 10px; color: var(--sub); flex-shrink: 0; text-align: right; }
     .trifecta-combo { display: flex; align-items: center; gap: 3px; }
-    .t-boat { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: #fff; flex-shrink: 0; }
+    .t-boat { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; }
     .trifecta-arrow { font-size: 10px; color: var(--sub); }
     .trifecta-prob { margin-left: auto; font-size: 12px; font-weight: bold; color: var(--primary); }
     .trifecta-label { font-size: 10px; padding: 1px 5px; border-radius: 6px; font-weight: bold; flex-shrink: 0; }
     .lbl-top   { background: #f9a825; color: #fff; }
     .lbl-good  { background: #1565c0; color: #fff; }
     .lbl-ref   { background: #e0e0e0; color: #555; }
+
+    /* 的中結果バナー（Fix 4） */
+    .result-banner { margin: 0 12px 8px; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+    .result-hit  { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+    .result-miss { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+    .result-pending { background: rgba(21,101,192,.07); color: var(--primary); border: 1px solid rgba(21,101,192,.2); }
+    @media (prefers-color-scheme: dark) {
+      .result-hit  { background: #1b3a1f; color: #81c784; border-color: #388e3c; }
+      .result-miss { background: #3a1515; color: #ef9a9a; border-color: #b71c1c; }
+      .result-pending { background: rgba(92,143,219,.1); color: #5c8fdb; border-color: rgba(92,143,219,.3); }
+    }
 
     /* キャリブレーションパネル */
     .calib-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin: 12px 0; padding: 12px 14px; }
@@ -156,7 +181,7 @@
     締切間近のみ
   </label>
   <span class="auto-badge" title="3分ごと自動更新"></span>
-  <button class="notify-btn" id="calib-btn" onclick="toggleCalib()" style="margin-left:0">📊 精度</button>
+  <button class="notify-btn" id="calib-btn" onclick="toggleCalib()">📊 精度</button>
   <button class="notify-btn" id="notify-btn" onclick="toggleNotify()">🔔 通知OFF</button>
   <button class="refresh-btn" onclick="load(true)">今すぐ更新</button>
 </div>
@@ -174,8 +199,8 @@ let _data = null;
 
 // ─── 通知まわり ────────────────────────────────────────────
 let _notifyOn = localStorage.getItem('notifyOn') === '1';
-let _prevStatus = null;            // 直前の取得ステータス
-let _notifiedHits = new Set();     // 通知済みHIT（重複防止）
+let _prevStatus = null;
+let _notifiedHits = new Set();
 
 function updateNotifyBtn() {
   const btn = document.getElementById('notify-btn');
@@ -185,7 +210,6 @@ function updateNotifyBtn() {
 
 async function toggleNotify() {
   if (!_notifyOn) {
-    // 許可をリクエスト
     if ('Notification' in window && Notification.permission !== 'granted') {
       const perm = await Notification.requestPermission();
       if (perm !== 'granted') {
@@ -194,7 +218,7 @@ async function toggleNotify() {
       }
     }
     _notifyOn = true;
-    beep(); vibrate([100]);   // テスト通知
+    beep(); vibrate([100]);
     pushNotify('🔔 通知ON', '予想取得完了・★HIT発見時にお知らせします');
   } else {
     _notifyOn = false;
@@ -209,7 +233,7 @@ function pushNotify(title, body) {
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(title, { body, icon: '/icon.svg', tag: 'boatrace', renotify: true });
     }
-  } catch (e) { /* バックグラウンド制限などは無視 */ }
+  } catch (e) {}
 }
 
 function vibrate(pattern) {
@@ -235,8 +259,6 @@ function beep() {
 
 function checkAndNotify() {
   if (!_data) return;
-
-  // 1) HIT艇を通知（新規のみ）
   const hits = [];
   for (const r of (_data.races || [])) {
     for (const b of (r.boats || [])) {
@@ -253,14 +275,10 @@ function checkAndNotify() {
     beep(); vibrate([200, 100, 200]);
     pushNotify(`⭐ HIT ${hits.length}件！`, hits.slice(0, 4).join('\n'));
   }
-
-  // 2) 取得完了を通知（fetching → done の瞬間のみ）
   if (_prevStatus === 'fetching' && _data.status === 'done') {
     const total = (_data.races || []).length;
     const hitRaces = (_data.races || []).filter(r => r.has_hit).length;
-    if (hits.length === 0) {       // HIT通知と二重にならないように
-      beep(); vibrate([100]);
-    }
+    if (hits.length === 0) { beep(); vibrate([100]); }
     pushNotify('✅ 予想取得完了', `${total}レース取得 / ★HIT ${hitRaces}レース`);
   }
   _prevStatus = _data.status;
@@ -274,7 +292,6 @@ async function load(force = false) {
     _data = await res.json();
     render();
     checkAndNotify();
-    // 取得中なら10秒後に再ポーリング
     if (_data.status === 'fetching') {
       setTimeout(() => load(), 10000);
     }
@@ -287,10 +304,20 @@ async function load(force = false) {
   }
 }
 
+// ─── 締切時刻からリアルタイムに残り分を計算（Fix 3） ─────
+function calcMinutesLeft(deadlineStr) {
+  if (!deadlineStr) return null;
+  const m = deadlineStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const now = new Date();
+  const ddl = new Date(now);
+  ddl.setHours(parseInt(m[1]), parseInt(m[2]), 0, 0);
+  return (ddl - now) / 60000;
+}
+
 function render() {
   if (!_data) return;
 
-  // ヘッダー更新
   document.getElementById('model-name').textContent = `モデル: ${_data.model}`;
   document.getElementById('updated-time').textContent = `更新: ${_data.updated}`;
   document.getElementById('cond-badge').textContent =
@@ -301,7 +328,6 @@ function render() {
     return;
   }
 
-  // 取得中プログレス表示
   if (_data.status === 'fetching') {
     const prog = _data.progress || 'データ取得中...';
     const done = (_data.races || []).length;
@@ -311,10 +337,19 @@ function render() {
   const hitOnly = document.getElementById('hit-only').checked;
   const imminentOnly = document.getElementById('imminent-only').checked;
   const fetching = _data.status === 'fetching';
+  const grace = _data.closed_grace_min || 2;
+
   let races = (_data.races || []);
   if (hitOnly) races = races.filter(r => r.has_hit);
-  // 取得中はimminentフィルターを外して見せる（取得完了後に適用）
-  if (imminentOnly && !fetching) races = races.filter(r => r.imminent);
+
+  // Fix 3: 締切フィルターをリアルタイムで計算（取得中でも適用）
+  if (imminentOnly) {
+    races = races.filter(r => {
+      const ml = calcMinutesLeft(r.deadline);
+      if (ml === null) return true;   // 締切不明は表示
+      return ml >= -grace;            // grace分以内なら表示
+    });
+  }
 
   if (races.length === 0) {
     let empty;
@@ -332,7 +367,6 @@ function render() {
     return;
   }
 
-  // 場ごとにまとめる（締切が近い順は維持）
   const venues = {};
   const order = [];
   for (const r of races) {
@@ -354,54 +388,32 @@ function render() {
 function renderRace(race, hitOnly) {
   const boats = hitOnly ? race.boats.filter(b => b.hit) : race.boats;
 
-  // 締切時刻・残り時間
+  // 締切時刻・残り時間（リアルタイム計算）
   let timeInfo = '';
   if (race.deadline) {
+    const ml = calcMinutesLeft(race.deadline);
     let left = '';
-    if (race.minutes_left !== null && race.minutes_left !== undefined) {
-      left = race.minutes_left <= 0 ? '締切' : `あと${race.minutes_left}分`;
+    if (ml !== null) {
+      left = ml <= 0 ? '締切' : `あと${Math.round(ml)}分`;
     }
-    const cls = race.imminent ? 'deadline imminent' : 'deadline';
+    const isImm = ml !== null && ml >= 0 && ml <= (_data.imminent_window || 5);
+    const cls = isImm ? 'deadline imminent' : 'deadline';
     timeInfo = `<span class="${cls}">⏱ ${race.deadline} ${left}</span>`;
+    if (isImm) timeInfo += '<span class="badge-imminent">締切間近</span>';
   }
 
   let html = `<div class="race-card">
     <div class="race-header">
       <span>${race.race_no}R</span>
       ${timeInfo}
-      ${race.imminent ? '<span class="badge-imminent">締切間近</span>' : ''}
       ${race.has_hit ? '<span class="hit-star">⭐</span>' : ''}
     </div>`;
 
-  for (const b of boats) {
-    const ex  = b.ex_time ? b.ex_time.toFixed(2) : '--.--';
-    const mtr = b.motor_rate ? (b.motor_rate * 100).toFixed(1) + '%' : '--';
-    const nwr = b.national_win_rate ? b.national_win_rate.toFixed(2) : '--';
-    const oddsStr = b.odds ? b.odds.toFixed(1) : (b.odds_available === false ? '未公開' : '---');
-    const prob = (b.win_prob * 100).toFixed(1) + '%';
-    const conf = (b.confidence !== undefined && b.confidence !== null) ? b.confidence : null;
-    const confLabel = b.conf_label || '--';
-    const confClass = confLabel === '高' ? 'conf-hi' : (confLabel === '中' ? 'conf-mid' : 'conf-lo');
+  // Fix 4: 的中結果バナー
+  html += renderResultBanner(race);
 
-    html += `
-      <div class="boat-row ${b.hit ? 'hit' : ''}">
-        <div class="boat-circle c${b.boat_no}">${b.boat_no}</div>
-        <div class="racer-info">
-          <div class="racer-name">
-            ${escHtml(b.racer)}
-            ${b.hit ? '<span class="hit-badge">★HIT</span>' : ''}
-          </div>
-          <div class="racer-sub">${b.class} 勝率${nwr} | ${b.course}コース 展示${ex} | モーター${mtr}</div>
-        </div>
-        <div class="val-col">
-          <div class="val-main ${b.odds >= 100 ? 'hi-odds' : (b.odds_available === false ? 'odds-pending' : '')}">${oddsStr}${b.odds ? '倍' : ''}</div>
-          <div class="val-label">オッズ</div>
-        </div>
-        <div class="val-col">
-          <div class="val-main ${b.win_prob >= 0.5 ? 'hi-prob' : ''}">${prob}</div>
-          <div class="conf-tag ${confClass}">信頼${confLabel}${conf !== null ? ' ' + conf + '%' : ''}</div>
-        </div>
-      </div>`;
+  for (const b of boats) {
+    html += renderBoatRow(b, race);
   }
 
   // 3連単セクション
@@ -411,13 +423,13 @@ function renderRace(race, hitOnly) {
       <div class="trifecta-list">`;
     race.trifecta.forEach((t, idx) => {
       const lbl = t.label === '最有力' ? 'lbl-top' : (t.label === '有力' ? 'lbl-good' : 'lbl-ref');
-      const boats = t.combo.map(n =>
+      const bts = t.combo.map(n =>
         `<div class="t-boat c${n}">${n}</div>`
       ).join('<span class="trifecta-arrow">→</span>');
       html += `
         <div class="trifecta-row">
           <div class="trifecta-rank">${idx + 1}</div>
-          <div class="trifecta-combo">${boats}</div>
+          <div class="trifecta-combo">${bts}</div>
           <span class="trifecta-label ${lbl}">${t.label}</span>
           <div class="trifecta-prob">${t.prob}%</div>
         </div>`;
@@ -426,6 +438,119 @@ function renderRace(race, hitOnly) {
   }
 
   return html + '</div>';
+}
+
+// Fix 4: 的中結果バナーを生成
+function renderResultBanner(race) {
+  if (!race.result || Object.keys(race.result).length === 0) {
+    // 締切済みで結果待ち
+    const ml = calcMinutesLeft(race.deadline);
+    if (ml !== null && ml < -(_data.closed_grace_min || 2)) {
+      return `<div class="result-banner result-pending">⏳ 結果集計待ち...</div>`;
+    }
+    return '';
+  }
+
+  // 結果あり: 1着を特定
+  const resultEntries = Object.entries(race.result);
+  const winnerEntry = resultEntries.find(([k, v]) => v === 1);
+  if (!winnerEntry) return '';
+  const winnerBoat = parseInt(winnerEntry[0]);
+
+  // HIT艇が勝ったか確認
+  const hitBoats = race.boats.filter(b => b.hit).map(b => b.boat_no);
+  const hitWon = hitBoats.includes(winnerBoat);
+  const hasHit = hitBoats.length > 0;
+
+  if (hasHit) {
+    if (hitWon) {
+      return `<div class="result-banner result-hit">✅ 的中！ 1着：${winnerBoat}号艇</div>`;
+    } else {
+      return `<div class="result-banner result-miss">❌ 不的中 1着：${winnerBoat}号艇 (予測：${hitBoats.join('・')}号艇)</div>`;
+    }
+  } else {
+    return `<div class="result-banner result-pending">📋 結果 1着：${winnerBoat}号艇</div>`;
+  }
+}
+
+// Fix 1 + Fix 6: 信頼度バッジとタップで詳細表示
+function renderBoatRow(b, race) {
+  const ex  = b.ex_time ? b.ex_time.toFixed(2) : '--.--';
+  const mtr = b.motor_rate ? (b.motor_rate * 100).toFixed(1) + '%' : '--';
+  const nwr = b.national_win_rate ? b.national_win_rate.toFixed(2) : '--';
+  const oddsStr = b.odds ? b.odds.toFixed(1) : (b.odds_available === false ? '未公開' : '---');
+  const prob = (b.win_prob * 100).toFixed(1) + '%';
+  const conf = (b.confidence !== undefined && b.confidence !== null) ? b.confidence : null;
+  const confLabel = b.conf_label || '--';
+
+  // Fix 1: バッジスタイルを改善
+  const badgeCls = confLabel === '高' ? 'conf-badge-hi' : (confLabel === '中' ? 'conf-badge-mid' : 'conf-badge-lo');
+  const detailId = `cd-${race.jcd}-${race.race_no}-${b.boat_no}`;
+
+  const confBadge = conf !== null
+    ? `<div class="conf-badge ${badgeCls}" onclick="toggleConf('${detailId}')">
+        信頼${confLabel} ${conf}% ▾
+       </div>
+       <div id="${detailId}" class="conf-detail">
+         ${renderConfDetail(b)}
+       </div>`
+    : '';
+
+  return `
+    <div class="boat-row ${b.hit ? 'hit' : ''}">
+      <div class="boat-circle c${b.boat_no}">${b.boat_no}</div>
+      <div class="racer-info">
+        <div class="racer-name">
+          ${escHtml(b.racer)}
+          ${b.hit ? '<span class="hit-badge">★HIT</span>' : ''}
+        </div>
+        <div class="racer-sub">${b.class} 勝率${nwr} | ${b.course}コース 展示${ex} | モーター${mtr}</div>
+        ${confBadge}
+      </div>
+      <div class="val-col">
+        <div class="val-main ${b.odds >= 100 ? 'hi-odds' : (b.odds_available === false ? 'odds-pending' : '')}">${oddsStr}${b.odds ? '倍' : ''}</div>
+        <div class="val-label">オッズ</div>
+      </div>
+      <div class="val-col">
+        <div class="val-main ${b.win_prob >= 0.5 ? 'hi-prob' : ''}">${prob}</div>
+        <div class="val-label">予測勝率</div>
+      </div>
+    </div>`;
+}
+
+// Fix 6: 信頼度計算式の内訳
+function renderConfDetail(b) {
+  const br = b.conf_breakdown;
+  if (!br) return '<div class="conf-detail-note">内訳データなし</div>';
+  const items = ['展示T', 'モーター', '勝率', 'コース'];
+  const present = br.completeness_items;
+  return `
+    <div class="conf-detail-row">
+      <span class="conf-detail-label">① データ完全性 (${present}/4項目)</span>
+      <span class="conf-detail-val">${br.completeness_score}点 /35点</span>
+    </div>
+    <div class="conf-detail-row">
+      <span class="conf-detail-label">② 予測余裕 (勝率${br.win_prob_pct}%)</span>
+      <span class="conf-detail-val">${br.margin_score}点 /35点</span>
+    </div>
+    <div class="conf-detail-row">
+      <span class="conf-detail-label">③ 支配度 (1位-2位差 ${br.gap_pct}%)</span>
+      <span class="conf-detail-val">${br.dominance_score}点 /30点</span>
+    </div>
+    <div class="conf-detail-row">
+      <span class="conf-detail-label">モデル係数 (${br.model_name})</span>
+      <span class="conf-detail-val">×${br.model_base}</span>
+    </div>
+    <div class="conf-detail-row">
+      <span class="conf-detail-label">生スコア → 補正後</span>
+      <span class="conf-detail-val">${br.raw_score}% → ${b.confidence}%</span>
+    </div>
+    <div class="conf-detail-note">※ 10件以上蓄積後にキャリブレーション補正が有効になります</div>`;
+}
+
+function toggleConf(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
 }
 
 function escHtml(s) {
