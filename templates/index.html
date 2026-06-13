@@ -115,6 +115,14 @@
     .lbl-good  { background: #1565c0; color: #fff; }
     .lbl-ref   { background: #e0e0e0; color: #555; }
 
+    /* キャリブレーションパネル */
+    .calib-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin: 12px 0; padding: 12px 14px; }
+    .calib-title { font-size: 13px; font-weight: bold; color: var(--primary); margin-bottom: 8px; }
+    .calib-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+    .calib-row:last-child { border-bottom: none; }
+    .calib-ok   { color: #2e7d32; font-weight: bold; }
+    .calib-wait { color: var(--sub); }
+
     /* ローディング・エラー・空 */
     .loading { text-align: center; padding: 48px 16px; color: var(--sub); }
     .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: 12px; }
@@ -148,6 +156,7 @@
     締切間近のみ
   </label>
   <span class="auto-badge" title="3分ごと自動更新"></span>
+  <button class="notify-btn" id="calib-btn" onclick="toggleCalib()" style="margin-left:0">📊 精度</button>
   <button class="notify-btn" id="notify-btn" onclick="toggleNotify()">🔔 通知OFF</button>
   <button class="refresh-btn" onclick="load(true)">今すぐ更新</button>
 </div>
@@ -318,7 +327,8 @@ function render() {
     } else {
       empty = `<div class="empty">実施中のレースがありません</div>`;
     }
-    document.getElementById('app').innerHTML = empty;
+    document.getElementById('app').innerHTML =
+      renderCalibPanel(_data.calib_stats) + empty;
     return;
   }
 
@@ -337,7 +347,8 @@ function render() {
     for (const race of v.races) html += renderRace(race, hitOnly);
     html += '</div>';
   }
-  document.getElementById('app').innerHTML = html;
+  document.getElementById('app').innerHTML =
+    renderCalibPanel(_data.calib_stats) + html;
 }
 
 function renderRace(race, hitOnly) {
@@ -419,6 +430,37 @@ function renderRace(race, hitOnly) {
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── キャリブレーションパネル ────────────────────────────────
+let _showCalib = false;
+
+function toggleCalib() {
+  _showCalib = !_showCalib;
+  document.getElementById('calib-btn').classList.toggle('on', _showCalib);
+  render();
+}
+
+function renderCalibPanel(stats) {
+  if (!_showCalib || !stats || stats.length === 0) return '';
+  let html = `<div class="calib-panel">
+    <div class="calib-title">📊 信頼度キャリブレーション状況</div>
+    <div class="calib-row" style="font-weight:bold">
+      <span>信頼度帯</span><span>補正係数</span><span>サンプル数</span><span>状態</span>
+    </div>`;
+  for (const r of stats) {
+    const okCls = r.status === '補正中' ? 'calib-ok' : 'calib-wait';
+    html += `<div class="calib-row">
+      <span>${r.bucket}</span>
+      <span>${r.factor.toFixed(2)}×</span>
+      <span>${r.samples}件</span>
+      <span class="${okCls}">${r.status}</span>
+    </div>`;
+  }
+  html += `<div style="font-size:11px;color:var(--sub);margin-top:6px">
+    ※ 10件以上蓄積されると自動的に補正が始まります
+  </div></div>`;
+  return html;
 }
 
 updateNotifyBtn();

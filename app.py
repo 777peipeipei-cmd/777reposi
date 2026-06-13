@@ -20,6 +20,7 @@ from flask import Flask, Response, jsonify, render_template, request
 import config
 import features as feat
 import model as mdl
+import results as res_tracker
 import scraper
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -36,6 +37,7 @@ _state = {
     'date': None,
     'model': None,
     'error': None,
+    'calib_stats': res_tracker.calibrator.stats(),
 }
 _lock = threading.Lock()
 _fetch_thread = None
@@ -157,8 +159,11 @@ def _fetch_all(date_str):
                 boat_no = racer.get('boat_no', i + 1)
                 odds = odds_map.get(boat_no) if odds_available else None
                 win_prob = float(probs[i])
-                conf_pct, conf_label = mdl.compute_confidence(
+                raw_conf, _ = mdl.compute_confidence(
                     racer, before, boat_no, win_prob, all_probs, predictor.name)
+                # キャリブレーション補正を適用
+                conf_pct   = res_tracker.calibrator.calibrate(raw_conf)
+                conf_label = res_tracker.calibrator.label(conf_pct)
                 hit = bool(odds and odds >= config.ODDS_THRESHOLD
                            and win_prob >= config.WIN_PROB_THRESHOLD)
                 if hit:
@@ -202,6 +207,12 @@ def _fetch_all(date_str):
                 'has_hit':      has_hit,
                 'trifecta':     trifecta,
             }
+            # 予測を保存（後でキャリブレーションに使う）
+            try:
+                res_tracker.save_prediction(jcd, race_no, date_str, boats, trifecta)
+            except Exception as e2:
+                logger.debug('予測保存エラー（無視）: %s', e2)
+
             with _lock:
                 _state['races'].append(race)
                 _state['updated'] = datetime.now().strftime('%H:%M:%S')
@@ -213,6 +224,22 @@ def _fetch_all(date_str):
         _state['status'] = 'done'
         _state['progress'] = ''
         logger.info('取得完了: %d レース', len(_state['races']))
+
+    # 過去レースの結果を確認してキャリブレーションを更新
+    threading.Thread(target=_update_calibration, args=(date_str,), daemon=True).start()
+
+
+def _update_calibration(date_str):
+    """バックグラウンドで結果照合 → キャリブレーション更新"""
+    try:
+        filled = res_tracker.check_pending_results(date_str)
+        if filled > 0:
+            logger.info('結果照合: %d 件 → キャリブレーション更新', filled)
+            res_tracker.calibrator.update_from_results()
+            with _lock:
+                _state['calib_stats'] = res_tracker.calibrator.stats()
+    except Exception as e:
+        logger.warning('キャリブレーション更新エラー: %s', e)
 
 
 def _start_fetch(date_str, force=False):
@@ -280,6 +307,7 @@ def api_predictions():
             'imminent_window': config.IMMINENT_WINDOW_MIN,
             'races':           list(_state['races']),
             'error':           _state['error'],
+            'calib_stats':     _state.get('calib_stats', []),
         })
 
 
