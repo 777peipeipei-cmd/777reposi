@@ -15,7 +15,7 @@ import threading
 import time
 from datetime import datetime
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 import config
 import features as feat
@@ -206,6 +206,33 @@ def index():
     date_str = request.args.get('date', datetime.now().strftime('%Y%m%d'))
     _start_fetch(date_str)
     return render_template('index.html', date=date_str)
+
+
+@app.route('/manifest.json')
+def manifest():
+    return jsonify({
+        'name': 'ボートレース予想',
+        'short_name': '競艇予想',
+        'start_url': '/',
+        'display': 'standalone',
+        'background_color': '#0d47a1',
+        'theme_color': '#0d47a1',
+        'icons': [
+            {'src': '/icon.svg', 'sizes': '192x192', 'type': 'image/svg+xml'},
+            {'src': '/icon.svg', 'sizes': '512x512', 'type': 'image/svg+xml'},
+        ],
+    })
+
+
+@app.route('/icon.svg')
+def icon():
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">'
+        '<rect width="512" height="512" rx="96" fill="#0d47a1"/>'
+        '<text x="50%" y="50%" font-size="300" text-anchor="middle" '
+        'dominant-baseline="central">🚤</text></svg>'
+    )
+    return Response(svg, mimetype='image/svg+xml')
 
 
 @app.route('/api/predictions')

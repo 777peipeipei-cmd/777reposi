@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="競艇予想">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <title>🚤 競艇予想</title>
   <style>
     :root {
@@ -45,8 +48,11 @@
     .condition-badge { background: var(--primary-dark); color: #fff; padding: 3px 8px; border-radius: 12px; font-size: 11px; white-space: nowrap; }
     .filter-label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--sub); }
     .filter-label input { cursor: pointer; width: 16px; height: 16px; }
-    .refresh-btn { margin-left: auto; background: var(--primary); color: #fff; border: none; padding: 6px 14px; border-radius: 16px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .refresh-btn { background: var(--primary); color: #fff; border: none; padding: 6px 14px; border-radius: 16px; font-size: 12px; cursor: pointer; white-space: nowrap; }
     .refresh-btn:active { opacity: .7; }
+    .notify-btn { margin-left: auto; background: transparent; color: var(--sub); border: 1px solid var(--border); padding: 5px 12px; border-radius: 16px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .notify-btn.on { background: #2e7d32; color: #fff; border-color: #2e7d32; }
+    .notify-btn:active { opacity: .7; }
 
     /* コンテンツ */
     .container { max-width: 640px; margin: 0 auto; padding: 8px; }
@@ -121,6 +127,7 @@
     締切間近のみ
   </label>
   <span class="auto-badge" title="3分ごと自動更新"></span>
+  <button class="notify-btn" id="notify-btn" onclick="toggleNotify()">🔔 通知OFF</button>
   <button class="refresh-btn" onclick="load(true)">今すぐ更新</button>
 </div>
 
@@ -135,6 +142,100 @@
 const DATE = '{{ date }}';
 let _data = null;
 
+// ─── 通知まわり ────────────────────────────────────────────
+let _notifyOn = localStorage.getItem('notifyOn') === '1';
+let _prevStatus = null;            // 直前の取得ステータス
+let _notifiedHits = new Set();     // 通知済みHIT（重複防止）
+
+function updateNotifyBtn() {
+  const btn = document.getElementById('notify-btn');
+  btn.textContent = _notifyOn ? '🔔 通知ON' : '🔔 通知OFF';
+  btn.classList.toggle('on', _notifyOn);
+}
+
+async function toggleNotify() {
+  if (!_notifyOn) {
+    // 許可をリクエスト
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') {
+        alert('通知が許可されませんでした。ブラウザの設定から許可してください。\n（iPhoneは「ホーム画面に追加」してから開くと通知できます）');
+        return;
+      }
+    }
+    _notifyOn = true;
+    beep(); vibrate([100]);   // テスト通知
+    pushNotify('🔔 通知ON', '予想取得完了・★HIT発見時にお知らせします');
+  } else {
+    _notifyOn = false;
+  }
+  localStorage.setItem('notifyOn', _notifyOn ? '1' : '0');
+  updateNotifyBtn();
+}
+
+function pushNotify(title, body) {
+  if (!_notifyOn) return;
+  try {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/icon.svg', tag: 'boatrace', renotify: true });
+    }
+  } catch (e) { /* バックグラウンド制限などは無視 */ }
+}
+
+function vibrate(pattern) {
+  if (_notifyOn && navigator.vibrate) {
+    try { navigator.vibrate(pattern); } catch (e) {}
+  }
+}
+
+let _audioCtx = null;
+function beep() {
+  if (!_notifyOn) return;
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = _audioCtx.createOscillator();
+    const g = _audioCtx.createGain();
+    o.connect(g); g.connect(_audioCtx.destination);
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.15, _audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, _audioCtx.currentTime + 0.4);
+    o.start(); o.stop(_audioCtx.currentTime + 0.4);
+  } catch (e) {}
+}
+
+function checkAndNotify() {
+  if (!_data) return;
+
+  // 1) HIT艇を通知（新規のみ）
+  const hits = [];
+  for (const r of (_data.races || [])) {
+    for (const b of (r.boats || [])) {
+      if (b.hit) {
+        const key = `${r.jcd}-${r.race_no}-${b.boat_no}`;
+        if (!_notifiedHits.has(key)) {
+          _notifiedHits.add(key);
+          hits.push(`${r.venue}${r.race_no}R ${b.boat_no}号艇`);
+        }
+      }
+    }
+  }
+  if (hits.length > 0) {
+    beep(); vibrate([200, 100, 200]);
+    pushNotify(`⭐ HIT ${hits.length}件！`, hits.slice(0, 4).join('\n'));
+  }
+
+  // 2) 取得完了を通知（fetching → done の瞬間のみ）
+  if (_prevStatus === 'fetching' && _data.status === 'done') {
+    const total = (_data.races || []).length;
+    const hitRaces = (_data.races || []).filter(r => r.has_hit).length;
+    if (hits.length === 0) {       // HIT通知と二重にならないように
+      beep(); vibrate([100]);
+    }
+    pushNotify('✅ 予想取得完了', `${total}レース取得 / ★HIT ${hitRaces}レース`);
+  }
+  _prevStatus = _data.status;
+}
+
 async function load(force = false) {
   const url = `/api/predictions?date=${DATE}${force ? '&force=1' : ''}`;
   try {
@@ -142,6 +243,7 @@ async function load(force = false) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _data = await res.json();
     render();
+    checkAndNotify();
     // 取得中なら10秒後に再ポーリング
     if (_data.status === 'fetching') {
       setTimeout(() => load(), 10000);
@@ -274,6 +376,7 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+updateNotifyBtn();
 load();
 setInterval(() => load(), 3 * 60 * 1000); // 3分ごと自動更新
 </script>
