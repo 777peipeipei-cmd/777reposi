@@ -416,10 +416,11 @@ function renderRace(race, hitOnly) {
     html += renderBoatRow(b, race);
   }
 
-  // 3連単セクション
-  if (race.trifecta && race.trifecta.length > 0) {
+  // 3連単セクション（★HIT艇が1着の場合のみ表示）
+  if (race.has_hit && race.trifecta && race.trifecta.length > 0) {
+    const hitNos = race.boats.filter(b => b.hit).map(b => b.boat_no).join('・');
     html += `<div class="trifecta-box">
-      <div class="trifecta-title">🎯 3連単おすすめ（予測確率順・最大6点）</div>
+      <div class="trifecta-title">🎯 3連単（★HIT ${hitNos}号艇を1着に固定・最大6点）</div>
       <div class="trifecta-list">`;
     race.trifecta.forEach((t, idx) => {
       const lbl = t.label === '最有力' ? 'lbl-top' : (t.label === '有力' ? 'lbl-good' : 'lbl-ref');

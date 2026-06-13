@@ -228,10 +228,15 @@ def _build_race(item, predictor, date_str):
             'hit':               hit,
         })
 
-    # 3連単予測（Harville式）
+    # 3連単予測（HIT艇が1着の組み合わせのみ。HIT艇がない場合は空）
+    hit_boat_nos   = [b['boat_no'] for b in boats if b['hit']]
     boat_nos_list  = [b['boat_no']  for b in boats]
     win_probs_list = [b['win_prob'] for b in boats]
-    trifecta = mdl.predict_trifecta(win_probs_list, boat_nos_list, top_n=6)
+    if hit_boat_nos:
+        trifecta = mdl.predict_trifecta(win_probs_list, boat_nos_list,
+                                        top_n=6, required_first=hit_boat_nos)
+    else:
+        trifecta = []
 
     mins_left = None
     if ddl is not None:
