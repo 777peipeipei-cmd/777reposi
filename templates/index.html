@@ -129,12 +129,15 @@ async function load(force = false) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _data = await res.json();
     render();
+    // 取得中なら10秒後に再ポーリング
+    if (_data.status === 'fetching') {
+      setTimeout(() => load(), 10000);
+    }
   } catch (e) {
     document.getElementById('app').innerHTML =
       `<div class="error-box">
-        ❌ エラー: ${e.message}<br><br>
-        boatrace.jp に接続できません。<br>
-        <strong>自宅のWi-Fiに接続したPC/Mac</strong>でこのサーバーを起動してください。
+        ❌ 接続エラー: ${e.message}<br><br>
+        <strong>自宅のWi-Fiに接続したPC/Mac</strong>でサーバーを起動してください。
       </div>`;
   }
 }
@@ -153,12 +156,21 @@ function render() {
     return;
   }
 
+  // 取得中プログレス表示
+  if (_data.status === 'fetching') {
+    const prog = _data.progress || 'データ取得中...';
+    const done = (_data.races || []).length;
+    document.getElementById('updated-time').textContent = `${prog} (取得済 ${done}R)`;
+  }
+
   const hitOnly = document.getElementById('hit-only').checked;
   const races = (_data.races || []).filter(r => !hitOnly || r.has_hit);
 
   if (races.length === 0) {
-    document.getElementById('app').innerHTML =
-      `<div class="empty">${hitOnly ? '⭐ 条件を満たす艇はまだありません' : 'レースデータがありません'}</div>`;
+    const msg = _data.status === 'fetching'
+      ? `<div class="loading"><div class="spinner"></div><div>${_data.progress || 'データ取得中...'}<br><small>取得できたレースから順次表示されます</small></div></div>`
+      : `<div class="empty">${hitOnly ? '⭐ 条件を満たす艇はまだありません' : 'レースデータがありません'}</div>`;
+    document.getElementById('app').innerHTML = msg;
     return;
   }
 

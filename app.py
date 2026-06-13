@@ -1,10 +1,12 @@
 """
-ボートレース予想 Webアプリ
+ボートレース予想 Webアプリ（バックグラウンド取得版）
+
+- サーバー起動時にバックグラウンドでデータ取得開始
+- APIは取得済みデータをすぐに返す（取得中のレースはスキップ）
+- 3分ごとに自動更新
 
 使い方（自宅PC/Macで実行）:
-    pip install -r requirements.txt
     python app.py
-
 スマホから: http://<PCのIPアドレス>:5000
 """
 import logging
@@ -24,111 +26,119 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# シンプルなメモリキャッシュ（5分間有効）
-_cache = {}
-_cache_lock = threading.Lock()
-_CACHE_TTL = 300
-
-
-def _cached_predictions(date_str):
-    now = time.time()
-    with _cache_lock:
-        entry = _cache.get(date_str)
-        if entry and now - entry['ts'] < _CACHE_TTL:
-            return entry['data']
-
-    data = _build_predictions(date_str)
-
-    with _cache_lock:
-        _cache[date_str] = {'data': data, 'ts': time.time()}
-    return data
-
-
-def _build_predictions(date_str):
-    predictor = mdl.load_predictor()
-    venues = scraper.get_holding_venues(date_str)
-
-    if not venues:
-        return {
-            'date': date_str,
-            'model': predictor.name,
-            'updated': _now_str(),
-            'odds_threshold': config.ODDS_THRESHOLD,
-            'prob_threshold': config.WIN_PROB_THRESHOLD,
-            'races': [],
-            'error': 'boatrace.jpに接続できません。自宅PCで実行してください。',
-        }
-
-    races = []
-    for jcd in venues:
-        for race_no in range(1, config.MAX_RACES + 1):
-            racers = scraper.get_race_card(race_no, jcd, date_str)
-            if not racers:
-                break
-
-            before = scraper.get_before_info(race_no, jcd, date_str)
-            odds_map = scraper.get_win_odds(race_no, jcd, date_str)
-            if not odds_map:
-                continue
-
-            X = feat.build_race_matrix(racers, before, jcd)
-            probs = predictor.predict_proba(X)
-
-            boats = []
-            has_hit = False
-            for i, racer in enumerate(racers):
-                boat_no = racer.get('boat_no', i + 1)
-                odds = odds_map.get(boat_no)
-                win_prob = float(probs[i])
-                hit = bool(odds and odds >= config.ODDS_THRESHOLD
-                           and win_prob >= config.WIN_PROB_THRESHOLD)
-                if hit:
-                    has_hit = True
-
-                boats.append({
-                    'boat_no': boat_no,
-                    'racer': racer.get('racer_name', '不明'),
-                    'class': _cls(racer.get('class_rank')),
-                    'national_win_rate': racer.get('national_win_rate'),
-                    'course': before['course_positions'].get(boat_no, boat_no),
-                    'ex_time': before['exhibition_times'].get(boat_no),
-                    'motor_rate': racer.get('motor_top2_rate'),
-                    'odds': odds,
-                    'win_prob': win_prob,
-                    'hit': hit,
-                })
-
-            races.append({
-                'jcd': jcd,
-                'venue': config.VENUES.get(jcd, jcd),
-                'race_no': race_no,
-                'boats': boats,
-                'has_hit': has_hit,
-            })
-
-    return {
-        'date': date_str,
-        'model': predictor.name,
-        'updated': _now_str(),
-        'odds_threshold': config.ODDS_THRESHOLD,
-        'prob_threshold': config.WIN_PROB_THRESHOLD,
-        'races': races,
-    }
+# ─── グローバルキャッシュ ───────────────────────────────────────
+_state = {
+    'races': [],          # 取得済みレース一覧
+    'status': 'idle',     # idle / fetching / done / error
+    'progress': '',       # 「○○場 3R取得中...」
+    'updated': None,
+    'date': None,
+    'model': None,
+    'error': None,
+}
+_lock = threading.Lock()
+_fetch_thread = None
 
 
 def _cls(rank):
     return {4: 'A1', 3: 'A2', 2: 'B1', 1: 'B2'}.get(rank, '??')
 
 
-def _now_str():
-    return datetime.now().strftime('%H:%M:%S')
+def _fetch_all(date_str):
+    """バックグラウンドスレッドで全場のデータを取得する"""
+    predictor = mdl.load_predictor()
+
+    with _lock:
+        _state.update({'status': 'fetching', 'date': date_str,
+                       'model': predictor.name, 'races': [], 'error': None})
+
+    venues = scraper.get_holding_venues(date_str)
+    if not venues:
+        with _lock:
+            _state['status'] = 'error'
+            _state['error'] = 'boatrace.jp から開催情報を取得できませんでした。'
+        return
+
+    for jcd in venues:
+        venue_name = config.VENUES.get(jcd, jcd)
+        for race_no in range(1, config.MAX_RACES + 1):
+            with _lock:
+                _state['progress'] = f'{venue_name} {race_no}R 取得中...'
+
+            try:
+                racers = scraper.get_race_card(race_no, jcd, date_str)
+                if not racers:
+                    break
+
+                before = scraper.get_before_info(race_no, jcd, date_str)
+                odds_map = scraper.get_win_odds(race_no, jcd, date_str)
+                if not odds_map:
+                    continue
+
+                X = feat.build_race_matrix(racers, before, jcd)
+                probs = predictor.predict_proba(X)
+
+                boats = []
+                has_hit = False
+                for i, racer in enumerate(racers):
+                    boat_no = racer.get('boat_no', i + 1)
+                    odds = odds_map.get(boat_no)
+                    win_prob = float(probs[i])
+                    hit = bool(odds and odds >= config.ODDS_THRESHOLD
+                               and win_prob >= config.WIN_PROB_THRESHOLD)
+                    if hit:
+                        has_hit = True
+
+                    boats.append({
+                        'boat_no':          boat_no,
+                        'racer':            racer.get('racer_name', '不明'),
+                        'class':            _cls(racer.get('class_rank')),
+                        'national_win_rate': racer.get('national_win_rate'),
+                        'course':           before['course_positions'].get(boat_no, boat_no),
+                        'ex_time':          before['exhibition_times'].get(boat_no),
+                        'motor_rate':       racer.get('motor_top2_rate'),
+                        'odds':             odds,
+                        'win_prob':         win_prob,
+                        'hit':              hit,
+                    })
+
+                race = {
+                    'jcd':     jcd,
+                    'venue':   venue_name,
+                    'race_no': race_no,
+                    'boats':   boats,
+                    'has_hit': has_hit,
+                }
+                with _lock:
+                    _state['races'].append(race)
+                    _state['updated'] = datetime.now().strftime('%H:%M:%S')
+
+            except Exception as e:
+                logger.warning('%s %dR エラー: %s', venue_name, race_no, e)
+
+    with _lock:
+        _state['status'] = 'done'
+        _state['progress'] = ''
+        logger.info('取得完了: %d レース', len(_state['races']))
 
 
-# ─── ルート ───────────────────────────────────────────────────
+def _start_fetch(date_str, force=False):
+    global _fetch_thread
+    with _lock:
+        if not force and _state['date'] == date_str and _state['status'] in ('fetching', 'done'):
+            return
+    if _fetch_thread and _fetch_thread.is_alive():
+        return  # すでに実行中
+    _fetch_thread = threading.Thread(target=_fetch_all, args=(date_str,), daemon=True)
+    _fetch_thread.start()
+
+
+# ─── ルート ────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
     date_str = request.args.get('date', datetime.now().strftime('%Y%m%d'))
+    _start_fetch(date_str)
     return render_template('index.html', date=date_str)
 
 
@@ -136,15 +146,20 @@ def index():
 def api_predictions():
     date_str = request.args.get('date', datetime.now().strftime('%Y%m%d'))
     force = request.args.get('force', '0') == '1'
-    if force:
-        with _cache_lock:
-            _cache.pop(date_str, None)
-    try:
-        data = _cached_predictions(date_str)
-        return jsonify(data)
-    except Exception as e:
-        logger.exception('prediction error')
-        return jsonify({'error': str(e)}), 500
+    _start_fetch(date_str, force=force)
+
+    with _lock:
+        return jsonify({
+            'date':            _state['date'] or date_str,
+            'model':           _state['model'] or '...',
+            'updated':         _state['updated'] or '--:--:--',
+            'status':          _state['status'],
+            'progress':        _state['progress'],
+            'odds_threshold':  config.ODDS_THRESHOLD,
+            'prob_threshold':  config.WIN_PROB_THRESHOLD,
+            'races':           list(_state['races']),
+            'error':           _state['error'],
+        })
 
 
 if __name__ == '__main__':
@@ -156,12 +171,13 @@ if __name__ == '__main__':
         local_ip = '127.0.0.1'
 
     print()
-    print('=' * 50)
+    print('=' * 52)
     print('  ボートレース予想アプリ 起動中')
     print(f'  PC:     http://localhost:5000')
     print(f'  スマホ: http://{local_ip}:5000')
     print('  ※ スマホとPCが同じWi-Fiに接続していること')
-    print('=' * 50)
+    print('  ※ ブラウザで開くと自動でデータ取得開始します')
+    print('=' * 52)
     print()
 
     app.run(host='0.0.0.0', port=5000, debug=False)

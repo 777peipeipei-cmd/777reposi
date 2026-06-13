@@ -33,7 +33,7 @@ HEADERS = {
 
 ODDS_THRESHOLD = 100.0      # 単勝オッズの閾値
 WIN_PROB_THRESHOLD = 0.50   # 予測勝率の閾値
-REQUEST_DELAY = 1.5         # リクエスト間隔（秒）
+REQUEST_DELAY = 0.5         # リクエスト間隔（秒）
 MODEL_PATH = 'models/rf_model.pkl'
 DATA_DIR = 'data'
 MAX_RACES = 12
