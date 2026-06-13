@@ -328,6 +328,32 @@ def api_predictions():
         })
 
 
+@app.route('/api/debug-scraper')
+def api_debug_scraper():
+    """
+    スクレイパーのHTML解析状況を返すデバッグ用エンドポイント。
+    ブラウザで http://localhost:5000/api/debug-scraper?jcd=07&rno=1 を開いて確認。
+    """
+    date_str = request.args.get('date', datetime.now().strftime('%Y%m%d'))
+    jcd = request.args.get('jcd', '07')
+    race_no = int(request.args.get('rno', '1'))
+
+    racelist_info = scraper.debug_scrape_racelist(race_no, jcd, date_str)
+    odds_info     = scraper.debug_scrape_odds(race_no, jcd, date_str)
+
+    # 実際のパース結果も含める
+    racers = scraper.get_race_card(race_no, jcd, date_str)
+    odds   = scraper.get_win_odds(race_no, jcd, date_str)
+
+    return jsonify({
+        'params':     {'jcd': jcd, 'race_no': race_no, 'date': date_str},
+        'racelist':   racelist_info,
+        'odds_page':  odds_info,
+        'parsed_racers': racers,
+        'parsed_odds':   odds,
+    })
+
+
 if __name__ == '__main__':
     import socket
     hostname = socket.gethostname()
