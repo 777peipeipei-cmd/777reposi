@@ -59,32 +59,45 @@ def _parse_deadline(time_str, now):
 
 def _collect_pending_races(venues, date_str, now):
     """
-    実施中の場の「まだ締切前（実施中）」レースを締切時刻順に並べて返す。
+    実施中の場の「締切前かつ近い」レースを締切時刻順に並べて返す。
     Returns list of (deadline_dt|None, minutes_to_close|None, jcd, venue, race_no)
     """
     pending = []
     for jcd in venues:
         venue_name = config.VENUES.get(jcd, jcd)
+        with _lock:
+            _state['progress'] = f'{venue_name} の締切時刻を確認中...'
+
         deadlines = scraper.get_race_deadlines(jcd, date_str)
 
         if not deadlines:
-            # 締切時刻が取れない場合は全レースを対象（時刻不明）
-            for rno in range(1, config.MAX_RACES + 1):
+            # 締切時刻が取れない場合は先頭数レースのみ（暴走防止）
+            logger.warning('%s: 締切時刻を取得できず。先頭%dレースのみ対象。',
+                           venue_name, config.FALLBACK_RACES)
+            for rno in range(1, config.FALLBACK_RACES + 1):
                 pending.append((None, None, jcd, venue_name, rno))
             continue
 
+        kept = 0
         for rno, tstr in deadlines.items():
             ddl = _parse_deadline(tstr, now)
             if ddl is None:
-                pending.append((None, None, jcd, venue_name, rno))
                 continue
             minutes = (ddl - now).total_seconds() / 60.0
-            # 締切後 CLOSED_GRACE_MIN 分を過ぎたレース（実施済み）は除外
-            if minutes >= -config.CLOSED_GRACE_MIN:
+            # 締切前(GRACE考慮)かつ FETCH_WINDOW 分以内のレースだけ
+            if -config.CLOSED_GRACE_MIN <= minutes <= config.FETCH_WINDOW_MIN:
                 pending.append((ddl, minutes, jcd, venue_name, rno))
+                kept += 1
+        logger.info('%s: 締切前レース %d 件', venue_name, kept)
 
     # 締切が近い順（時刻不明は末尾）
     pending.sort(key=lambda x: (x[0] is None, x[0] or now))
+
+    # 最大数で打ち切り（暴走防止）
+    if len(pending) > config.MAX_FETCH_RACES:
+        logger.info('対象レースが多いため %d 件に制限', config.MAX_FETCH_RACES)
+        pending = pending[:config.MAX_FETCH_RACES]
+
     return pending
 
 
@@ -103,6 +116,7 @@ def _fetch_all(date_str):
             _state['error'] = 'boatrace.jp から開催情報を取得できませんでした。'
         return
 
+    logger.info('開催中の場: %d 件 → 締切時刻を確認します', len(venues))
     now = datetime.now()
     pending = _collect_pending_races(venues, date_str, now)
 
@@ -111,11 +125,16 @@ def _fetch_all(date_str):
             _state['status'] = 'done'
             _state['progress'] = ''
             _state['error'] = '実施中（締切前）のレースがありません。本日の開催が終了している可能性があります。'
+        logger.info('対象レースなし（開催終了の可能性）')
         return
 
-    for ddl, minutes, jcd, venue_name, race_no in pending:
+    total = len(pending)
+    logger.info('取得対象: %d レース。締切が近い順に取得開始します。', total)
+
+    for idx, (ddl, minutes, jcd, venue_name, race_no) in enumerate(pending, 1):
         with _lock:
-            _state['progress'] = f'{venue_name} {race_no}R 取得中...'
+            _state['progress'] = f'[{idx}/{total}] {venue_name} {race_no}R 取得中...'
+        logger.info('[%d/%d] %s %dR 取得中...', idx, total, venue_name, race_no)
 
         try:
             racers = scraper.get_race_card(race_no, jcd, date_str)
