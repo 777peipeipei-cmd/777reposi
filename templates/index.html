@@ -148,6 +148,10 @@
     .calib-ok   { color: #2e7d32; font-weight: bold; }
     .calib-wait { color: var(--sub); }
 
+    /* 閾値セレクター */
+    .thresh-select { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+    .thresh-label { font-size: 11px; color: var(--sub); white-space: nowrap; }
+
     /* ローディング・エラー・空 */
     .loading { text-align: center; padding: 48px 16px; color: var(--sub); }
     .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: 12px; }
@@ -181,6 +185,19 @@
     締切間近のみ
   </label>
   <span class="auto-badge" title="3分ごと自動更新"></span>
+  <span class="thresh-label">勝率</span>
+  <select class="thresh-select" id="prob-thresh" onchange="onThreshChange()">
+    <option value="0.10">10%</option>
+    <option value="0.15">15%</option>
+    <option value="0.20">20%</option>
+    <option value="0.25">25%</option>
+    <option value="0.30" selected>30%</option>
+    <option value="0.35">35%</option>
+    <option value="0.40">40%</option>
+    <option value="0.45">45%</option>
+    <option value="0.50">50%</option>
+  </select>
+  <span class="thresh-label">以上</span>
   <button class="notify-btn" id="calib-btn" onclick="toggleCalib()">📊 精度</button>
   <button class="notify-btn" id="notify-btn" onclick="toggleNotify()">🔔 通知OFF</button>
   <button class="refresh-btn" onclick="load(true)">今すぐ更新</button>
@@ -196,6 +213,33 @@
 <script>
 const DATE = '{{ date }}';
 let _data = null;
+
+// ─── 勝率閾値セレクター ────────────────────────────────────
+function getProbThreshold() {
+  return parseFloat(document.getElementById('prob-thresh').value || '0.30');
+}
+
+function onThreshChange() {
+  const v = document.getElementById('prob-thresh').value;
+  localStorage.setItem('probThreshold', v);
+  render();
+}
+
+// ページ読み込み時に保存済み値を復元
+(function initThresh() {
+  const saved = localStorage.getItem('probThreshold');
+  if (saved) {
+    const sel = document.getElementById('prob-thresh');
+    if (sel) sel.value = saved;
+  }
+})();
+
+// HIT判定をクライアント側で計算（閾値変更に即座対応）
+function calcHit(b) {
+  const oddsOk  = b.odds && b.odds >= ((_data && _data.odds_threshold) || 100);
+  const probOk  = b.win_prob >= getProbThreshold();
+  return oddsOk && probOk;
+}
 
 // ─── 通知まわり ────────────────────────────────────────────
 let _notifyOn = localStorage.getItem('notifyOn') === '1';
@@ -320,8 +364,9 @@ function render() {
 
   document.getElementById('model-name').textContent = `モデル: ${_data.model}`;
   document.getElementById('updated-time').textContent = `更新: ${_data.updated}`;
+  const tPct = (getProbThreshold() * 100).toFixed(0);
   document.getElementById('cond-badge').textContent =
-    `オッズ>${_data.odds_threshold}倍 かつ 予測勝率>${(_data.prob_threshold * 100).toFixed(0)}%`;
+    `オッズ>${_data.odds_threshold}倍 かつ 予測勝率>${tPct}%`;
 
   if (_data.error) {
     document.getElementById('app').innerHTML = `<div class="error-box">❌ ${_data.error}</div>`;
@@ -340,6 +385,12 @@ function render() {
   const grace = _data.closed_grace_min || 2;
 
   let races = (_data.races || []);
+  // has_hit をクライアント側で再計算（閾値変更に即対応）
+  races = races.map(r => ({
+    ...r,
+    boats: r.boats.map(b => ({ ...b, hit: calcHit(b) })),
+  }));
+  races = races.map(r => ({ ...r, has_hit: r.boats.some(b => b.hit) }));
   if (hitOnly) races = races.filter(r => r.has_hit);
 
   // Fix 3: 締切フィルターをリアルタイムで計算（取得中でも適用）
