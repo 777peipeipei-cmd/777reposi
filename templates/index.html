@@ -530,7 +530,7 @@ function renderBoatRow(b, race) {
   const ex  = b.ex_time ? b.ex_time.toFixed(2) : '--.--';
   const mtr = b.motor_rate ? (b.motor_rate * 100).toFixed(1) + '%' : '--';
   const nwr = b.national_win_rate ? b.national_win_rate.toFixed(2) : '--';
-  const oddsStr = b.odds ? b.odds.toFixed(1) : (b.odds_available === false ? '未公開' : '---');
+  const oddsStr = b.odds ? b.odds.toFixed(1) : '---';
   const prob = (b.win_prob * 100).toFixed(1) + '%';
   const conf = (b.confidence !== undefined && b.confidence !== null) ? b.confidence : null;
   const confLabel = b.conf_label || '--';
@@ -560,7 +560,7 @@ function renderBoatRow(b, race) {
         ${confBadge}
       </div>
       <div class="val-col">
-        <div class="val-main ${b.odds >= 100 ? 'hi-odds' : (b.odds_available === false ? 'odds-pending' : '')}">${oddsStr}${b.odds ? '倍' : ''}</div>
+        <div class="val-main ${b.odds && b.odds >= 100 ? 'hi-odds' : ''}">${oddsStr}${b.odds ? '倍' : ''}</div>
         <div class="val-label">オッズ</div>
       </div>
       <div class="val-col">

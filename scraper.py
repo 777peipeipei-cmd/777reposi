@@ -75,6 +75,44 @@ def _safe_float(text):
         return None
 
 
+def _clean_racer_name(text, toban=None):
+    """選手名テキストを整形: 登録番号・余分な数字を除去"""
+    text = _normalize(text)
+    if toban:
+        text = text.replace(toban, '')
+    # 末尾の4〜5桁登録番号を除去
+    text = re.sub(r'\d{4,5}\s*$', '', text).strip()
+    # 連続空白を1つに
+    text = re.sub(r'[\s　]+', ' ', text).strip()
+    return text or None
+
+
+def _global_racer_names(soup):
+    """
+    ページ全体のracerprofileリンクを出現順に抽出して {1:name, ..., 6:name} を返す。
+    is-boatColor アンカー方式で名前が取れなかった場合の最終手段。
+    """
+    names = {}
+    seen_keys = set()
+    idx = 0
+    for a in soup.find_all('a', href=True):
+        href = a.get('href', '')
+        if not re.search(r'toban|racerprofile', href, re.I):
+            continue
+        m = re.search(r'toban=(\d+)', href, re.I)
+        key = m.group(1) if m else href
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        idx += 1
+        if idx > 6:
+            break
+        txt = _clean_racer_name(a.get_text(strip=True), m.group(1) if m else None)
+        if txt:
+            names[idx] = txt
+    return names
+
+
 def get_holding_venues(date_str):
     """開催中の場コードリストを返す"""
     soup = _fetch(f'{config.BASE_URL}/index', {'hd': date_str})
@@ -151,11 +189,22 @@ def get_race_card(race_no, jcd, date_str):
     names_found = sum(1 for r in racers if 'racer_name' in r)
     if names_found < 3:
         logger.info('racelist: is-boatColor anchor で名前取得 %d/6 → フォールバック', names_found)
-        return _parse_race_card_fallback(soup, racers)
-
-    # 名前が取れたが一部不足の場合もフォールバックで補完
-    if names_found < 6:
         racers = _parse_race_card_fallback(soup, racers)
+        names_found = sum(1 for r in racers if 'racer_name' in r)
+
+    # まだ取れていない艇はグローバル検索で補完（最終手段）
+    if names_found < 6:
+        global_names = _global_racer_names(soup)
+        for r in racers:
+            if 'racer_name' not in r:
+                n = r['boat_no']
+                if n in global_names:
+                    r['racer_name'] = global_names[n]
+                    logger.debug('グローバル検索で名前補完: 艇%d → %s', n, global_names[n])
+        # フォールバックで補完（まだ欠けていれば）
+        names_found_after = sum(1 for r in racers if 'racer_name' in r)
+        if names_found_after < 6 and names_found < 6:
+            racers = _parse_race_card_fallback(soup, racers)
 
     logger.info('racelist jcd=%s race=%d: 名前=%d/6 クラス=%d/6 勝率=%d/6',
                 jcd, race_no,
@@ -173,12 +222,13 @@ def _extract_name_class(row, d):
         for a in cell.find_all('a', href=True):
             href = a.get('href', '')
             if re.search(r'toban|racerprofile', href, re.I):
-                txt = a.get_text(strip=True)
+                m = re.search(r'toban=(\d+)', href, re.I)
+                toban = m.group(1) if m else None
+                txt = _clean_racer_name(a.get_text(strip=True), toban)
                 if txt and 'racer_name' not in d:
                     d['racer_name'] = txt
-                m = re.search(r'toban=(\d+)', href, re.I)
-                if m:
-                    d.setdefault('racer_no', m.group(1))
+                if toban:
+                    d.setdefault('racer_no', toban)
         # 級別（全角対応: Ａ１→A1）
         t_norm = _normalize(cell.get_text(strip=True))
         if t_norm in _CLASS_MAP and 'class_rank' not in d:
