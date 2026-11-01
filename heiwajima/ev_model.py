@@ -136,6 +136,12 @@ def bets_for(race, p, rule):
         ok = (~np.isnan(o)) & (ev >= rule['thr']) & (o <= rule['omax']) & (o >= rule.get('omin', 1))
         idx = np.where(ok)[0]
         return list(idx[np.argsort(-ev[idx])][:rule['maxn']])
+    if kind == 'edge':
+        # 市場確率に対してモデル確率が何倍か (p / p_mkt) が閾値以上のものを買う
+        ed = p / np.clip(race['pq'], 1e-9, None)
+        ok = (~np.isnan(o)) & (ed >= rule['thr']) & (o <= rule['omax'])
+        idx = np.where(ok)[0]
+        return list(idx[np.argsort(-ed[idx])][:rule['maxn']])
     raise ValueError(kind)
 
 
@@ -169,8 +175,9 @@ def summarize(per, label, boot=True):
     return out
 
 
-GRID = [dict(kind='ev', thr=t, omax=om, maxn=mn)
-        for t in (1.0, 1.1, 1.2, 1.3, 1.5, 1.8, 2.0)
+GRID = [dict(kind=k, thr=t, omax=om, maxn=mn)
+        for k, ts in (('ev', (0.8, 0.9, 1.0, 1.1, 1.2, 1.5, 2.0)), ('edge', (1.2, 1.5, 2.0, 3.0)))
+        for t in ts
         for om in (30, 60, 100, 200, 500)
         for mn in (1, 2, 3, 5)]
 
@@ -219,7 +226,7 @@ def main(csv, odds_dir, test_start, out_json=None):
                 if s['bets'] >= 150:            # 少なすぎる買い方は選ばない
                     scored.append((s['roi'], rule, s))
             scored.sort(key=lambda x: -x[0])
-            best[name] = scored[0]
+            best[name] = scored[0] if scored else (None, dict(kind='top1'), {'bets': 0})
 
         # --- テスト: 学習期間全体で再学習、合成の重みも学習期間全体で推定
         m = boat_model().fit(tr[feats], tr['y'])
@@ -249,7 +256,7 @@ def main(csv, odds_dir, test_start, out_json=None):
                                 test=rows)
         print(f'== {variant}: train {len(r_tr)}R, test {len(r_te)}R, benter w={w_all.round(3)}')
         for k, v in best.items():
-            print('  chosen on train', k, v[1], 'train ROI', v[0], 'bets', v[2]['bets'])
+            print('  chosen on train', k, v[1], 'train ROI', v[0], 'bets', v[2].get('bets'))
         for r in rows:
             print('  ', r)
     if out_json:
