@@ -13,8 +13,8 @@ for d in sorted(k for k,v in days.items() if v):
         f=f'{out}/{d}_{r}.json'
         if os.path.exists(f): continue
         b={'place_no':'4','race_no':str(r),'hiduke':d}
-        k=post('request_race_kekka.php',b); time.sleep(1)
-        t=post('request_rentan_three.php',b); time.sleep(1)
+        k=post('request_race_kekka.php',b); time.sleep(0.3)
+        t=post('request_rentan_three.php',b); time.sleep(0.3)
         if k is None: print('FAIL',d,r,flush=True); continue
         json.dump({'date':d,'race':r,'boats':[{x:e.get(x) for x in KEEP} for e in k],'trifecta':t},open(f,'w'),ensure_ascii=False)
     print('done',d,flush=True)
