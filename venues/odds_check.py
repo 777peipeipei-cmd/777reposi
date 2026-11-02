@@ -10,7 +10,7 @@
 2. 1号艇絡みの固定買い目を、オッズが 2.3〜3.5倍 / 2.3倍以上 の時だけ買った場合
 3. 公式データの段階で残った候補条件に、オッズ条件を足した場合
 
-usage: python odds_check.py OFFICIAL_OUT_DIR ODDS_DIR_24 ODDS_DIR_01 OUT_JSON
+usage: python odds_check.py OFFICIAL_OUT_DIR OUT_JSON JCD=ODDS_DIR [JCD=ODDS_DIR ...] [--grade-override CSV]
 """
 import glob
 import json
@@ -133,10 +133,10 @@ def fixed_bets(df, odds, win, cond_masks):
     return res
 
 
-def main(off_dir, d24, d01, out_json):
-    b, r = A.load(off_dir)
+def main(off_dir, out_json, pairs, grade_override=None):
+    b, r = A.load(off_dir, grade_override)
     res = {}
-    for jcd, d in ((24, d24), (1, d01)):
+    for jcd, d in pairs:
         name = A.VENUE[jcd]
         odds = load_odds(d)
         if not odds:
@@ -169,4 +169,10 @@ def main(off_dir, d24, d01, out_json):
 
 
 if __name__ == '__main__':
-    main(*sys.argv[1:5])
+    args = sys.argv[3:]
+    go = None
+    if '--grade-override' in args:
+        i = args.index('--grade-override')
+        go = args[i + 1]
+        args = args[:i] + args[i + 2:]
+    main(sys.argv[1], sys.argv[2], [(int(a.split('=')[0]), a.split('=')[1]) for a in args], go)

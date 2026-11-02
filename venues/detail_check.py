@@ -4,7 +4,7 @@
 - 1号艇がその順位のとき (1位 / 5〜6位) の1着率
 - グレード常連 (SG/G1 出走30回以上 または 優出1回以上) とそれ以外の1着率 (1コース / 外枠)
 
-usage: python detail_check.py DETAIL_DIR_24 DETAIL_DIR_01 OUT_JSON
+usage: python detail_check.py OUT_JSON 名前=DETAIL_DIR [名前=DETAIL_DIR ...]
 """
 import glob
 import json
@@ -79,9 +79,9 @@ def analyze(df):
     return out
 
 
-def main(d24, d01, out_json):
+def main(out_json, pairs):
     res = {}
-    for name, d in (('大村', d24), ('桐生', d01)):
+    for name, d in pairs:
         if os.path.isdir(d) and glob.glob(os.path.join(d, '*.json')):
             res[name] = analyze(load(d))
             print(name, json.dumps(res[name], ensure_ascii=False))
@@ -89,4 +89,4 @@ def main(d24, d01, out_json):
 
 
 if __name__ == '__main__':
-    main(*sys.argv[1:4])
+    main(sys.argv[1], [tuple(a.split('=', 1)) for a in sys.argv[2:]])
