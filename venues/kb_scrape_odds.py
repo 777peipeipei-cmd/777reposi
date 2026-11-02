@@ -1,7 +1,7 @@
 """詳細データがあるレースのオッズを取得する (約1秒に1リクエスト・キャッシュ・再開可)。
 
 保存するもの: 3連単/2連単/単勝/3連複 の最終オッズ、3連単の時系列オッズ (締切 30/20/10/5/0 分前)。
-usage: python kb_scrape_odds.py PLACE_NO RACES_DIR OUT_DIR  (2秒に1リクエスト、3回連続失敗で停止)
+usage: python kb_scrape_odds.py PLACE_NO DATES_FILE OUT_DIR  (DATES_FILE: 'YYYYMMDD レース数' の行)  (2秒に1リクエスト、3回連続失敗で停止)
 """
 import glob
 import json
@@ -25,8 +25,12 @@ def post(body):
 def main(place, src, out):
     fails = 0
     os.makedirs(out, exist_ok=True)
-    for f in sorted(glob.glob(os.path.join(src, '*.json'))):
-        d, r = os.path.basename(f)[:-5].split('_')
+    todo = []
+    for line in open(src):
+        if line.strip():
+            dd, n = line.split()
+            todo += [(dd, str(r)) for r in range(1, int(n) + 1)]
+    for d, r in todo:
         dst = os.path.join(out, f'{d}_{r}.json')
         if os.path.exists(dst):
             continue
