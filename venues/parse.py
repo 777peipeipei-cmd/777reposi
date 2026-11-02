@@ -38,9 +38,13 @@ B_RACE = re.compile(r'^[\s　]*([０-９\d]+)Ｒ\s+(\S+)')
 def parse_b(block, date, jcd):
     lines = block.split('\n')
     title = ''
-    for l in lines[1:8]:
-        s = l.strip().replace('　', '')
-        if s and '番組表' not in s and 'ボートレース' not in s and not s.startswith('第'):
+    seen_hdr = False
+    for l in lines[:12]:
+        s = l.strip().replace('\u3000', '')
+        if '番組表' in s:
+            seen_hdr = True
+            continue
+        if seen_hdr and s:      # 「番組表」の次の空でない行が大会名
             title = s
             break
     rows, race, rtype = [], None, None
