@@ -46,7 +46,7 @@ def main(place, src, out):
         fails = 0
         final = {}
         for x in j.get('odds_list', []):
-            if x['type'] in ('3t', '2t', 't', '3f'):
+            if x['type'] in ('3t', '2t', 't', '3f', '2f', 'k', 'f'):
                 final.setdefault(x['type'], {})[x['kumiawase']] = x['odds']
         ts = {}
         for x in j.get('jikan_odds_list', []):
