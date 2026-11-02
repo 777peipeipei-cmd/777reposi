@@ -7,7 +7,7 @@
 - 条件はレース前に分かる情報だけ (番組表: 級別・勝率・モーター・レース番号・グレード、
   直前情報: 展示タイム順位)。学習期間 (前半約9か月) で条件を選び、テスト期間 (後半約3か月) で評価する。
 
-usage: python analyze.py OUT_DIR(boats.csv, races.csv) SPLIT_DATE(YYYYMMDD) OUT_JSON
+usage: python analyze.py OUT_DIR(boats.csv, races.csv) SPLIT_DATE(YYYYMMDD) OUT_JSON [GRADE_OVERRIDE_CSV]
 """
 import itertools
 import json
@@ -17,7 +17,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-VENUE = {24: '大村', 1: '桐生'}
+VENUE = {24: '大村', 1: '桐生', 4: '平和島'}
 SG_WORDS = ['クラシック', 'オールスター', 'グランドチャンピオン', 'オーシャンカップ', 'メモリアル', 'ダービー',
             'チャレンジカップ', 'グランプリ']
 G1_WORDS = ['ダイヤモンドカップ', 'レディースチャンピオン', 'ヤングダービー', 'マスターズチャンピオン',
@@ -56,7 +56,8 @@ def pct(x):
     return round(float(x) * 100, 1)
 
 
-def load(d):
+def load(d, grade_override=None):
+    """grade_override: date,jcd,grade の CSV があれば、大会名からの判定より優先する (正式なグレードが分かる場合)。"""
     b = pd.read_csv(f'{d}/boats.csv')
     r = pd.read_csv(f'{d}/races.csv', dtype=str)
     for c in ('date', 'jcd', 'race', 'wind', 'wave'):
@@ -64,6 +65,11 @@ def load(d):
     r['grade'] = r.merge(b.drop_duplicates(['date', 'jcd', 'race'])[['date', 'jcd', 'race', 'title']],
                          on=['date', 'jcd', 'race'], how='left')['title'].map(grade_of).values
     b['grade'] = b['title'].map(grade_of)
+    if grade_override:
+        g = pd.read_csv(grade_override)
+        m = dict(zip(zip(g['date'], g['jcd']), g['grade']))
+        b['grade'] = [m.get((dd, jj), gg) for dd, jj, gg in zip(b['date'], b['jcd'], b['grade'])]
+        r['grade'] = [m.get((dd, jj), gg) for dd, jj, gg in zip(r['date'], r['jcd'], r['grade'])]
     b['ex_rk'] = b.groupby(['date', 'jcd', 'race'])['ex_time'].rank(method='min')
     return b, r
 
@@ -244,8 +250,8 @@ def baseline_table(df, split):
     return {bet: dict(train=stats(tr[bet]), test=stats(te[bet])) for bet in BETS}
 
 
-def main(d, split, out_json):
-    b, r = load(d)
+def main(d, split, out_json, grade_override=None):
+    b, r = load(d, grade_override)
     res = {}
     split = int(split)
     for jcd, name in VENUE.items():
@@ -265,4 +271,4 @@ def main(d, split, out_json):
 
 
 if __name__ == '__main__':
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:5])
