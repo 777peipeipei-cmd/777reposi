@@ -5,7 +5,7 @@ const [pn,r,hd,out]=process.argv.slice(2);
 await p.goto(`https://kyoteibiyori.com/race_shusso.php?place_no=${pn}&race_no=${r}&hiduke=${hd}&slider=4`,{waitUntil:'networkidle',timeout:60000});
 await p.waitForFunction(()=>document.body.innerText.includes('1号艇'),{timeout:20000}).catch(()=>{});await p.waitForTimeout(1500);
 let t=(await p.evaluate(()=>document.body.innerText)).replace(/\n\s*\n/g,'\n');
-const a=t.indexOf('コメント\t'),e=t.indexOf('展示STと本番ST');o+=t.slice(a,e)+'\n';
+let a=t.indexOf('コメント\t');if(a<0)a=t.indexOf('今節展示情報');if(a<0)a=t.indexOf('展示情報');const e=t.indexOf('展示STと本番ST');o+=t.slice(a,e)+'\n';
 const w=t.indexOf('気温');o+=t.slice(w,w+60)+'\n';
 await p.evaluate(()=>document.getElementById('modalMenu6').click());await p.waitForTimeout(3500);
 t=(await p.evaluate(()=>document.body.innerText)).replace(/\n\s*\n/g,'\n');
