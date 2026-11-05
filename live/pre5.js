@@ -7,6 +7,7 @@ await p.waitForFunction(()=>document.body.innerText.includes('1号艇'),{timeout
 let t=(await p.evaluate(()=>document.body.innerText)).replace(/\n\s*\n/g,'\n');
 let a=t.indexOf('コメント\t');if(a<0)a=t.indexOf('今節展示情報');if(a<0)a=t.indexOf('展示情報');const e=t.indexOf('展示STと本番ST');o+=t.slice(a,e)+'\n';
 const tide=(t.match(/(干潮時間[^\n]*|満潮時間[^\n]*)/)||[''])[0];o+='===潮 '+tide+'\n';
+const sd0=t.indexOf('スタート展示'),sd1=t.indexOf('展示リプレイ',sd0);if(sd0>=0)o+='===並び(S=スロー,D=ダッシュ)\n'+t.slice(sd0,sd1>sd0?sd1:sd0+200).replace(/\n\t/g,'\t')+'\n';
 const w=t.indexOf('気温');o+=t.slice(w,w+60)+'\n';
 await p.evaluate(()=>document.getElementById('modalMenu6').click());await p.waitForTimeout(3500);
 t=(await p.evaluate(()=>document.body.innerText)).replace(/\n\s*\n/g,'\n');
