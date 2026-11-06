@@ -15,3 +15,8 @@ for l in L:
 for k,l in enumerate(L):
     if l.strip() in ('モーター','ボート') and k+1<len(L) and L[k+1].startswith('2連対率\t'):
         print(l.strip()+'2連', '\t'.join(L[k+1].split('\t')[1:7]))
+
+# 事故率（期中の事故点/出走回数。0.70以上でB2降格）
+for k,l in enumerate(L):
+    if l.startswith('事故率\t') and len(l.split('\t'))>=7:
+        print('事故率', '\t'.join(l.split('\t')[1:7])); break
