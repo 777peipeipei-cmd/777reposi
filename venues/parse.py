@@ -57,6 +57,10 @@ def parse_b(block, date, jcd):
         m = B_ROW.match(l)
         if m and race:
             g = m.groups()
+            try:
+                [float(v) for v in g[7:11]]; float(g[12]); float(g[14])
+            except ValueError:  # 2連率100%で欄がくっついた行は飛ばす（まれ）
+                continue
             rows.append(dict(date=date, jcd=jcd, race=race, title=title, race_type=rtype,
                              waku=int(g[0]), racer=int(g[1]), name=g[2].replace('　', ''),
                              age=int(g[3]), branch=g[4], weight=int(g[5]), cls=g[6],
