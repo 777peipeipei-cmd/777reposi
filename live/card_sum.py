@@ -20,3 +20,21 @@ for k,l in enumerate(L):
 for k,l in enumerate(L):
     if l.startswith('事故率\t') and len(l.split('\t'))>=7:
         print('事故率', '\t'.join(l.split('\t')[1:7])); break
+
+# 選手の色（前付け・アウトに出る）: live/racer_style.csv（全24場1年分）
+try:
+    import csv, os
+    st={r['名前']:r for r in csv.DictReader(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'racer_style.csv')))}
+    i=[k for k,l in enumerate(L) if l.startswith('情報\t1号艇')][0]
+    names=L[i+2].split('\t')[:6]
+    marks=[]
+    for n in names:
+        r=st.get(n.replace(' ','').replace('\u3000',''))
+        if not r: marks.append('-'); continue
+        m=[]
+        if float(r['前付け率'])>=30: m.append('前付け'+r['前付け率']+'%')
+        if float(r['外に出る率'])>=10: m.append('外に出る'+r['外に出る率']+'%')
+        marks.append('/'.join(m) or '普通')
+    print('選手の色', '\t'.join(marks))
+except Exception as e:
+    print('選手の色 読めず', e)
