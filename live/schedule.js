@@ -1,8 +1,8 @@
 // usage: node live/schedule.js YYYYMMDD [place...]  -> prints "place race deadline name" for each race
-// place: 4=平和島 1=桐生 24=大村 (default all three)
+// place: 4=平和島 1=桐生 24=大村 15=丸亀 12=住之江 (default all five)
 const { chromium } = require('playwright');
 const [hd, ...ps] = process.argv.slice(2);
-const places = ps.length ? ps.map(Number) : [4, 1, 24];
+const places = ps.length ? ps.map(Number) : [4, 1, 24, 15, 12];
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage();
   for (const pn of places) {

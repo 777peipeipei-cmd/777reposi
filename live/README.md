@@ -3,7 +3,7 @@
 対象: 平和島(4)・桐生(1)・大村(24)。開催が少ない日は丸亀(15)・住之江(12)も（`node live/schedule.js YYYYMMDD 15 12`）。kyoteibiyori.com から取得（アクセスは1レースあたり数回、間隔を空ける）。
 
 ## スクリプト
-- `node live/schedule.js YYYYMMDD` … 3場のその日のレース番号・締切・レース名を表示（開催なしは `none`）
+- `node live/schedule.js YYYYMMDD` … 5場（平和島・桐生・大村・丸亀・住之江）のその日のレース番号・締切・レース名を表示（開催なしは `none`）
 - `bash live/pre5_wait.sh <場> <R> <YYYYMMDD> <出力>` … 周回タイムが出るまで60秒おきに最大10回 `pre5.js` を取り直す（予想はこちらを使う）
 - `node live/pre5.js <場> <R> <YYYYMMDD> <出力>` … 展示（周回・周り足・直線・展示ST・体重・コメント）・気象・3連単オッズ・単勝
 - `node live/card.js <場> <R> <YYYYMMDD> <出力>` → `python3 -I live/card_sum.py <出力>` … 出走表の要約（級別・勝率・当地・直近1か月・SG/G1・得点率・今節平均ST）
