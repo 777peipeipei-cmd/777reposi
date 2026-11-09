@@ -34,6 +34,16 @@ try:
         m=[]
         if float(r['前付け率'])>=30: m.append('前付け'+r['前付け率']+'%')
         if float(r['外に出る率'])>=10: m.append('外に出る'+r['外に出る率']+'%')
+        w=len(marks)+1
+        key={1:'c1_1着',2:'c2_1着',4:'c4_1着',5:'c5_3着内',6:'c6_3着内'}.get(w)
+        lab={1:'イン',2:'2コース',4:'カド',5:'5コース3着',6:'6コース3着'}.get(w)
+        if key and r.get(key) not in (None,''):
+            d=float(r[key])
+            if d>=5: m.append(lab+'得意+%.0f'%d)
+            elif d<=-5: m.append(lab+'苦手%.0f'%d)
+        if r.get('平均ST') not in (None,''):
+            if float(r['平均ST'])<=0.13: m.append('ST早い')
+            elif float(r['平均ST'])>=0.19: m.append('ST遅い')
         marks.append('/'.join(m) or '普通')
     print('選手の色', '\t'.join(marks))
 except Exception as e:
