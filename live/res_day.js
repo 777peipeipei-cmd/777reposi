@@ -8,6 +8,7 @@ for(let r=1;r<=12;r++){
  const rows=t.slice(i).split('\n').slice(1,7).map(l=>l.split('\t'));
  const k=(t.match(/\n(逃げ|差し|まくり差し|まくり|抜き|恵まれ)\t/)||[])[1]||'';
  const m=t.match(/3連単\t(\S+)\t([\d,]+)円\t(\d+)/);
- console.log(r, rows.map(x=>x[1]).slice(0,3).join('-'), m?m[2]+'円 '+m[3]+'番人気':'', k);
+ const q=t.match(/3連複\t(\S+)\t([\d,]+)円/);
+ console.log(r, rows.map(x=>x[1]).slice(0,3).join('-'), m?m[2]+'円 '+m[3]+'番人気':'', k, q?'3連複'+q[1]+' '+q[2]+'円':'');
  await p.waitForTimeout(1000);}
 await b.close();})();
