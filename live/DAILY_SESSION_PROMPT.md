@@ -5,7 +5,7 @@
 ## 最初にやること
 1. ブランチ `ccr-50104374-phxzaw` にいることを確認し、`git pull origin ccr-50104374-phxzaw`。
 2. `live/README.md` を全部読む（手順・買い方・ルール・場ごとの傾向）。これが一番大事。
-3. `notes/` の直近の日別振り返り（`*_live_review.md` の新しいもの3〜4本）と `notes/class_check_review.md` を読む。
+3. README の「子セッションからの集約」を必ず守る。`notes/rule_backtest_review.md` と `notes/hole_only_review.md` も読む。`notes/` の直近の日別振り返り（`*_live_review.md` の新しいもの3〜4本）と `notes/class_check_review.md` を読む。
 4. `node live/schedule.js {DATE}` で開催とレースの締切を確認。対象は平和島(4)・桐生(1)・大村(24)、少ない日は丸亀(15)・住之江(12)も。
 5. 全レースを締切の早い順に並べ、`mcp__claude-code-remote__send_later` で**各レースの締切15分前**（通知が数分遅れることがある）に「<場> <R>R の予想」を予約する。作れる数に上限があるので、まず次の約9レース分だけ予約し、予約済みを scratchpad の `live_state_{DATE}.txt` に書く。以後、予想のたびに次のレースを1つ足す（ローリング）。**予約漏れが無いか、予想のたびに live_state を見て確認する**（11/11 に平和島10〜12R・大村1〜5Rを予約し忘れた）。
 6. ユーザーに今日の開催一覧と予約状況を短く伝える。
@@ -33,4 +33,5 @@ Claude-Session: https://claude.ai/code/session_01NUjArKZ5jK32mvjNW6VyF8
 ## 注意
 - kyoteibiyori へのアクセスは控えめに（1レースで数回、間隔を空ける）。
 - PR は作らない。ブランチ `ccr-50104374-phxzaw` 以外に push しない。
+- ユーザーがこのセッションで方針や指示を話したら、振り返りの先頭に「ユーザーとの話」として要点を書く（親が次の日に README へ反映する）。
 - ルールを変えたくなっても README は直接書き換えず、振り返りに「提案」として書く（親セッションでまとめて判断する）。
