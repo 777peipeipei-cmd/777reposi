@@ -37,6 +37,7 @@ def load_kb(kbdir):
             if len(t5) < 100 or len(x['chokuzen']) != 6:
                 continue
             o = np.array([num(t5.get(k)) for k in PERMS])
+            o[~(o > 1.0)] = np.nan                      # 0・欠場などは売れていない扱い
             if np.isnan(o).sum() > 10:
                 continue
             odds[(x['date'], j, x['race'])] = o
@@ -79,7 +80,7 @@ FEATS = ['lap_z', 'turn_z', 'straight_z', 'tenji_z', 'is_lap1', 'lap1_gap', 'exs
 
 
 def market_probs(O):
-    q = 1 / np.where(np.isnan(O), 1e6, O)
+    q = 1 / np.where(np.isnan(O) | (O <= 1.0), 1e6, O)
     return q / q.sum(1, keepdims=True)
 
 
@@ -148,65 +149,88 @@ def combo_probs(d, keyl, Q, feats, ws, i):
     return out
 
 
-def main(bpath, rpath, kbdir, out):
-    d, keyl, O = build(bpath, rpath, kbdir)
-    Q = market_probs(O)
+def cv(d, keyl, Q, feats, fo):
+    """日付5分割の検証。学習に使っていない日の対数尤度(レースごと)・120通りの確率・係数を返す。"""
     n = len(keyl)
-    dates = np.array([k[0] for k in keyl])
-    ud = np.unique(dates)
-    fold = {dt: i % 5 for i, dt in enumerate(ud)}          # 日付ごとに5分割（同じ日は同じ組）
-    fo = np.array([fold[x] for x in dates])
-    res = dict(races=int(n), venues={VENUE[j]: int(sum(1 for k in keyl if k[1] == j)) for j in VENUE})
-    # 市場だけの対数尤度（3連単の当たり目）
-    idx = {p: k for k, p in enumerate(PERMS)}
-    win = d.tri1.values[::6]
-    ll_mkt = np.array([np.log(Q[i, idx[win[i]]]) for i in range(n)])
-    S = stage_data(d, keyl, Q, FEATS)
-    ll_mod = np.zeros(n)
-    W = []
+    S = stage_data(d, keyl, Q, feats)
+    ll = np.zeros(n)
     P = np.zeros((n, 120))
+    W = []
     for f in range(5):
         tr, te = fo != f, fo == f
         ws = [fit(X[tr], Y[tr], M[tr]) for X, Y, M in S]
         W.append(ws)
         for st, (X, Y, M) in enumerate(S):
-            ll_mod[te] += logp(X[te], Y[te], M[te], ws[st])[0]
+            ll[te] += logp(X[te], Y[te], M[te], ws[st])[0]
         for i in np.where(te)[0]:
-            P[i] = combo_probs(d, keyl, Q, FEATS, ws, i)
-    diff = ll_mod - ll_mkt
-    rng = np.random.default_rng(0)
-    bs = [diff[rng.integers(0, n, n)].mean() for _ in range(1000)]
-    res['loglik_per_race'] = dict(market=round(float(ll_mkt.mean()), 4), model=round(float(ll_mod.mean()), 4),
-                                  diff=round(float(diff.mean()), 4), diff_90=[round(float(np.percentile(bs, 5)), 4), round(float(np.percentile(bs, 95)), 4)])
-    res['weights_mean'] = {st: dict(zip(['log_market'] + FEATS, np.round(np.mean([w[k] for w in W], 0), 3).tolist()))
-                           for k, st in enumerate(['1着', '2着', '3着'])}
-    # 買う実験
-    pay = d.tri_pay1.values[::6]
-    res['betting'] = {}
-    for th in [1.0, 1.1, 1.2, 1.3, 1.5]:
-        for lo, hi in [(1, 1e9), (6, 1e9), (6, 50)]:
-            inv = ret = hits = 0
+            P[i] = combo_probs(d, keyl, Q, feats, ws, i)
+    wm = {st: dict(zip(['log_market'] + feats, np.round(np.mean([w[k] for w in W], 0), 3).tolist()))
+          for k, st in enumerate(['1着', '2着', '3着'])}
+    return ll, P, wm
+
+
+def ci(x, rng, k=1000):
+    bs = [x[rng.integers(0, len(x), len(x))].mean() for _ in range(k)]
+    return [round(float(np.percentile(bs, 5)), 4), round(float(np.percentile(bs, 95)), 4)]
+
+
+def betting(P, O, pay, win_ix, rng, ths=(None, 1.0, 1.1, 1.2, 1.3), ranges=((1, 1e9), (6, 1e9), (6, 50))):
+    """th=None は「その範囲の目を全部買う」基準。"""
+    out = {}
+    On = np.nan_to_num(O)
+    for th in ths:
+        for lo, hi in ranges:
             per = []
-            for i in range(n):
-                ev = P[i] * O[i]
-                buy = (ev >= th) & (O[i] >= lo) & (O[i] < hi)
+            for i in range(len(O)):
+                buy = (On[i] >= lo) & (On[i] < hi)
+                if th is not None:
+                    buy &= np.nan_to_num(P[i] * O[i]) >= th
                 k = int(buy.sum())
-                if not k:
-                    continue
-                r_ = pay[i] if buy[idx[win[i]]] else 0
-                inv += 100 * k; ret += r_; hits += r_ > 0
-                per.append((100 * k, r_))
+                if k:
+                    per.append((100 * k, pay[i] if buy[win_ix[i]] else 0))
             if not per:
                 continue
-            per = np.array(per)
+            per = np.array(per, float)
             bs = [per[ix, 1].sum() / per[ix, 0].sum() for ix in (rng.integers(0, len(per), len(per)) for _ in range(500))]
-            res['betting'][f'EV>={th} odds{lo}-{hi if hi < 1e9 else "inf"}'] = dict(
-                races=len(per), bets=int(inv / 100), roi=round(ret / inv * 100, 1), hits=int(hits),
-                roi_90=[round(float(np.percentile(bs, 5)) * 100, 1), round(float(np.percentile(bs, 95)) * 100, 1)])
-    # 市場の確率どおりに全部買った時（基準）と、5分前→確定の差
-    res['baseline_all_combos_roi'] = round(float(sum(pay) / (100 * 120 * n)) * 100, 1)
+            name = ('全部買い' if th is None else f'EV>={th}') + f' odds{lo}-{hi if hi < 1e9 else "inf"}'
+            out[name] = dict(races=len(per), bets=int(per[:, 0].sum() / 100), roi=round(per[:, 1].sum() / per[:, 0].sum() * 100, 1),
+                             hits=int((per[:, 1] > 0).sum()),
+                             roi_90=[round(float(np.percentile(bs, 5)) * 100, 1), round(float(np.percentile(bs, 95)) * 100, 1)])
+    return out
+
+
+def main(bpath, rpath, kbdir, out):
+    d, keyl, O = build(bpath, rpath, kbdir)
+    Q = market_probs(O)
+    n = len(keyl)
+    dates = np.array([k[0] for k in keyl])
+    fold = {dt: i % 5 for i, dt in enumerate(np.unique(dates))}   # 日付ごとに5分割（同じ日は同じ組）
+    fo = np.array([fold[x] for x in dates])
+    rng = np.random.default_rng(0)
+    res = dict(races=int(n), venues={VENUE[j]: int(sum(1 for k in keyl if k[1] == j)) for j in VENUE})
+    idx = {p: k for k, p in enumerate(PERMS)}
+    win = d.tri1.values[::6]
+    win_ix = np.array([idx[w] for w in win])
+    pay = d.tri_pay1.values[::6]
+    ll_mkt = np.log(Q[np.arange(n), win_ix])
+    ll_cal, P_cal, w_cal = cv(d, keyl, Q, [], fo)          # 市場オッズの補正だけ（人気・穴の偏り）
+    ll_mod, P_mod, w_mod = cv(d, keyl, Q, FEATS, fo)       # 補正＋周回などの直前情報
+    res['loglik_per_race'] = dict(
+        market=round(float(ll_mkt.mean()), 4), calib=round(float(ll_cal.mean()), 4), model=round(float(ll_mod.mean()), 4),
+        calib_minus_market=round(float((ll_cal - ll_mkt).mean()), 4), calib_minus_market_90=ci(ll_cal - ll_mkt, rng),
+        model_minus_calib=round(float((ll_mod - ll_cal).mean()), 4), model_minus_calib_90=ci(ll_mod - ll_cal, rng))
+    res['by_venue_model_minus_calib'] = {VENUE[j]: dict(n=int(m.sum()), diff=round(float((ll_mod - ll_cal)[m].mean()), 4), diff_90=ci((ll_mod - ll_cal)[m], rng))
+                                         for j in VENUE for m in [np.array([k[1] == j for k in keyl])] if m.sum()}
+    res['weights_calib'] = w_cal
+    res['weights_model'] = w_mod
+    res['betting_calib'] = betting(P_cal, O, pay, win_ix, rng)
+    res['betting_model'] = betting(P_mod, O, pay, win_ix, rng, ths=(1.0, 1.1, 1.2, 1.3))
+    # 5分前オッズと確定配当のずれ（当たり目）
+    o5 = O[np.arange(n), win_ix]
+    ok = ~np.isnan(o5)
+    res['final_over_5min_median'] = round(float(np.median(pay[ok] / 100 / o5[ok])), 3)
     json.dump(res, open(out, 'w'), ensure_ascii=False, indent=1)
-    print(json.dumps(res, ensure_ascii=False, indent=1))
+    print(json.dumps(res, ensure_ascii=False))
 
 
 if __name__ == '__main__':
