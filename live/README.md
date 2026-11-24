@@ -10,6 +10,7 @@
 - `node live/card.js <場> <R> <YYYYMMDD> <出力>` → `python3 -I live/card_sum.py <出力>` … 出走表の要約（級別・勝率・当地・直近1か月・SG/G1・得点率・平均ST・モーター2連・事故率・選手の色）
 - `python3 -I live/odds3t.py <pre5の出力> 1-2-3 ...` … 3連単オッズ
 - `node live/res_day.js <場> <YYYYMMDD> x` … 確定済みの結果
+- `python3 -I live/day_summary.py YYYYMMDD [...]` … 記録（notes/picks）から、場ごと・レースごとの表と場ごとの合計を出す。**ユーザーへの成績の報告はこの形**（11/24 ユーザー指示）。日付を複数渡すと期間の場ごとの合計
 
 ## 毎日の流れ（11/12から: 親セッションが毎朝 `live/DAILY_SESSION_PROMPT.md` で日ごとの子セッションを作り、予想は子セッションで行う）
 1. 朝（9:41頃）に `schedule.js` で5場の開催を確認。平和島・桐生・大村が少ない日は丸亀・住之江も予想する。
