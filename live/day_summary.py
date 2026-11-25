@@ -18,6 +18,21 @@ def num(x):
         return 0
 
 
+def kaime(r):
+    """買い目を短く: 100円の目はそのまま、200円以上は「目(200)」。"""
+    import re
+    k = r.get('買い目(金額)', '') or ''
+    if not k.strip():
+        return '-'
+    each = re.search(r'各\s*(\d+)', k)
+    out = []
+    for m in re.finditer(r'(3連[単複])?\s*([1-6][-=][1-6][-=][1-6])(?:\((\d+)\))?', k):
+        kind, combo, amt = m.group(1), m.group(2), m.group(3) or (each.group(1) if each else '100')
+        t = ('複' if kind == '3連複' else '') + combo
+        out.append(t if amt == '100' else f'{t}({amt})')
+    return ' '.join(out) if out else k[:40]
+
+
 rows = []
 for d in dates:
     for f in sorted(glob.glob(os.path.join(root, 'notes', 'picks', f'{d}*.tsv'))):
@@ -40,8 +55,8 @@ tot = {}
 for v in order:
     vr = [r for r in rows if r['場'] == v]
     print(f'### {v}' + (f'（{vr[0].get("節の日", "")}）' if len(dates) == 1 and vr[0].get('節の日') else ''))
-    print('| ' + ('日 | ' if len(dates) > 1 else '') + 'R | 分類 | 結果 | 3連単 | 投資 | 払戻 | 収支 |')
-    print('|' + ('---|' if len(dates) > 1 else '') + '---|---|---|---|---|---|---|')
+    print('| ' + ('日 | ' if len(dates) > 1 else '') + 'R | 分類 | 買い目 | 結果 | 3連単 | 投資 | 払戻 | 収支 |')
+    print('|' + ('---|' if len(dates) > 1 else '') + '---|---|---|---|---|---|---|---|')
     inv = ret = hit = n = man = 0
     for r in sorted(vr, key=lambda r: (r['_date'], num(r['R']))):
         i, p = num(r.get('投資')), num(r.get('払戻'))
@@ -52,10 +67,10 @@ for v in order:
         mark = '○' if p > 0 else ('見送り' if i == 0 else '×')
         res = r.get('1着-2着-3着', '')
         print('| ' + (f'{r["_date"][4:6]}/{r["_date"][6:]} | ' if len(dates) > 1 else '')
-              + f'{r["R"]} | {cls} | {res} {mark} | {pay:,}{"（万舟）" if pay >= 10000 else ""} | {i:,} | {p:,} | {p - i:+,} |')
+              + f'{r["R"]} | {cls} | {kaime(r)} | {res} {mark} | {pay:,}{"（万舟）" if pay >= 10000 else ""} | {i:,} | {p:,} | {p - i:+,} |')
         inv += i; ret += p; hit += p > 0; n += i > 0; man += pay >= 10000
-    print(f'| **計** | | {hit}/{n} 的中 | 万舟{man}本 | **{inv:,}** | **{ret:,}** | **{ret - inv:+,}** |' if len(dates) == 1 else
-          f'| **計** | | | {hit}/{n} 的中 | 万舟{man}本 | **{inv:,}** | **{ret:,}** | **{ret - inv:+,}** |')
+    print(f'| **計** | | | {hit}/{n} 的中 | 万舟{man}本 | **{inv:,}** | **{ret:,}** | **{ret - inv:+,}** |' if len(dates) == 1 else
+          f'| **計** | | | | {hit}/{n} 的中 | 万舟{man}本 | **{inv:,}** | **{ret:,}** | **{ret - inv:+,}** |')
     print()
     tot[v] = (n, hit, inv, ret, man)
 
